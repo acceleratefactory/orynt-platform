@@ -6,9 +6,12 @@ One organization can have multiple brands.
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy import String, DateTime, ForeignKey, Boolean, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
+
+
+VALID_SELLER_TYPES = ["website", "social_whatsapp", "physical", "digital"]
 
 
 class Brand(Base):
@@ -22,12 +25,20 @@ class Brand(Base):
     organization_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Task 1.1: seller type from onboarding flow
+    seller_type: Mapped[str] = mapped_column(String(50), nullable=True)
+    # Task 1.1: payment methods selected during onboarding (comma-separated)
+    payment_methods: Mapped[str] = mapped_column(Text, nullable=True)
+    # Onboarding completed flag
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
-    # Relationship back to organization
+    # Relationships
     organization: Mapped["Organization"] = relationship("Organization", back_populates="brands")
+    products: Mapped[list["Product"]] = relationship("Product", back_populates="brand", cascade="all, delete-orphan")
 
     def to_dict(self) -> dict:
         return {
@@ -35,5 +46,8 @@ class Brand(Base):
             "name": self.name,
             "category": self.category,
             "organization_id": self.organization_id,
+            "seller_type": self.seller_type,
+            "payment_methods": self.payment_methods.split(",") if self.payment_methods else [],
+            "onboarding_completed": self.onboarding_completed,
             "created_at": self.created_at.isoformat(),
         }

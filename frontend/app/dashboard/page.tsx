@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/auth"
 import { SetupFlow } from "@/components/onboarding/setup-flow"
+import { OnboardingFlow } from "@/components/onboarding/onboarding-flow"
 import { cn } from "@/lib/utils"
 import {
     RocketIcon,
@@ -27,9 +28,12 @@ interface Brand {
     name: string
     category: string
     organization_id: string
+    seller_type: string | null
+    payment_methods: string[]
+    onboarding_completed: boolean
 }
 
-type DashboardState = "loading" | "no-org" | "no-brand" | "ready"
+type DashboardState = "loading" | "no-org" | "no-brand" | "onboarding" | "ready"
 
 export default function DashboardPage() {
     const { user, clearSession, activeBrandId, setActiveBrandId } = useAuthStore()
@@ -56,8 +60,15 @@ export default function DashboardPage() {
             // Auto-select first brand; or stick with already-active brand
             const targetId = activeBrandId ?? list[0].id
             setActiveBrandId(targetId)
-            setActiveBrand(list.find((b) => b.id === targetId) ?? list[0])
-            setState("ready")
+            const target = list.find((b) => b.id === targetId) ?? list[0]
+            setActiveBrand(target)
+
+            // If onboarding not completed, show onboarding flow
+            if (!target.onboarding_completed) {
+                setState("onboarding")
+            } else {
+                setState("ready")
+            }
         } catch (err: any) {
             if (err?.response?.status === 404) {
                 setState("no-org")
@@ -72,7 +83,14 @@ export default function DashboardPage() {
     useEffect(() => {
         if (activeBrandId && brands.length > 0) {
             const found = brands.find((b) => b.id === activeBrandId)
-            if (found) setActiveBrand(found)
+            if (found) {
+                setActiveBrand(found)
+                if (!found.onboarding_completed) {
+                    setState("onboarding")
+                } else {
+                    setState("ready")
+                }
+            }
         }
     }, [activeBrandId])
 
@@ -109,6 +127,19 @@ export default function DashboardPage() {
         )
     }
 
+    // New user: onboarding not completed for active brand
+    if (state === "onboarding" && activeBrand) {
+        return (
+            <div className="fixed inset-0 z-[100] bg-white">
+                <OnboardingFlow
+                    brandId={activeBrand.id}
+                    brandName={activeBrand.name}
+                    onComplete={loadData}
+                />
+            </div>
+        )
+    }
+
     return (
         <div className="p-8 space-y-8">
             {/* Page heading */}
@@ -126,7 +157,7 @@ export default function DashboardPage() {
                 </button>
             </div>
 
-            {/* Info cards — scoped to activeBrandId */}
+            {/* Info cards */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow flex items-start gap-5">
                     <div className="bg-primary/10 p-3 rounded-2xl">
@@ -147,6 +178,11 @@ export default function DashboardPage() {
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Active Brand</p>
                         <p className="text-xl font-bold text-slate-900 truncate">{activeBrand?.name}</p>
                         <p className="text-xs text-slate-400 mt-1">{activeBrand?.category}</p>
+                        {activeBrand?.seller_type && (
+                            <span className="inline-block mt-2 text-[10px] font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full capitalize">
+                                {activeBrand.seller_type.replace("_", " ")}
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -162,7 +198,7 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            {/* All brands list (only if more than one) */}
+            {/* Multi-brand switcher list */}
             {brands.length > 1 && (
                 <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow">
                     <h3 className="text-sm font-bold text-slate-900 mb-5 uppercase tracking-widest">All Brands</h3>
@@ -170,9 +206,7 @@ export default function DashboardPage() {
                         {brands.map((b) => (
                             <div
                                 key={b.id}
-                                className={cn(
-                                    "flex items-center justify-between py-4 cursor-pointer hover:bg-slate-50 px-2 rounded-xl transition-colors",
-                                )}
+                                className="flex items-center justify-between py-4 cursor-pointer hover:bg-slate-50 px-2 rounded-xl transition-colors"
                                 onClick={() => setActiveBrandId(b.id)}
                             >
                                 <div>
@@ -193,10 +227,8 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* Sprint 2 coming-soon banner */}
-            <div className={cn(
-                "rounded-[28px] p-8 border border-primary/20 bg-primary/5 relative overflow-hidden"
-            )}>
+            {/* Sprint 2 banner */}
+            <div className="rounded-[28px] p-8 border border-primary/20 bg-primary/5 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-48 h-48 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
                 <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-6">
                     <div className="bg-primary p-4 rounded-3xl">
@@ -207,7 +239,7 @@ export default function DashboardPage() {
                             🚀 {activeBrand?.name} is set up — Analytics coming in Sprint 2!
                         </h3>
                         <p className="text-slate-500 text-sm mt-1">
-                            Your AI-powered sales insights, revenue charts, and product performance will appear right here.
+                            Connect your payment gateways in the next steps to start seeing your data here.
                         </p>
                     </div>
                 </div>

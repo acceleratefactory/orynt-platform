@@ -12,7 +12,7 @@ from app.routers import health, auth, organizations, brands
 from app.database import _get_engine
 from app.models.base import Base
 # Import models so SQLAlchemy registers them before create_all
-from app.models import organization, brand  # noqa: F401
+from app.models import organization, brand, product  # noqa: F401
 
 app = FastAPI(
     title="ORYNT API",
