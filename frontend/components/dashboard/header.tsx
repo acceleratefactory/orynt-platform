@@ -3,12 +3,17 @@
 import { Search, Bell, ChevronDown } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { useAuthStore } from "@/store/auth"
 
 export function Header() {
+    const { user } = useAuthStore()
+
+    const email = user?.email ?? ""
+    const initials = email.slice(0, 2).toUpperCase()
+
     return (
-        <header className="h-20 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-8 flex items-center justify-between">
+        <header className="h-16 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-8 flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
-                <h1 className="text-xl font-bold text-slate-900 mr-8">Overview</h1>
                 <div className="relative max-w-md w-full hidden md:block">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input
@@ -18,19 +23,19 @@ export function Header() {
                 </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
                 <Button variant="ghost" size="icon" className="relative text-slate-600 rounded-full hover:bg-slate-50">
                     <Bell className="w-5 h-5" />
-                    <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
                 </Button>
-                <div className="h-10 w-px bg-slate-100 mx-2" />
-                <Button variant="ghost" className="gap-2 text-slate-700 font-medium px-2 rounded-xl hover:bg-slate-50">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
-                        KG
+                <div className="h-8 w-px bg-slate-100" />
+                <div className="flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-slate-50 transition-colors cursor-default">
+                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xs">
+                        {initials}
                     </div>
-                    <span>Kemi's Boutique</span>
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                </Button>
+                    <span className="text-sm font-semibold text-slate-700 hidden sm:block max-w-[160px] truncate">
+                        {email}
+                    </span>
+                </div>
             </div>
         </header>
     )

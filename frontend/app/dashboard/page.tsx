@@ -4,16 +4,13 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/auth"
 import { SetupFlow } from "@/components/onboarding/setup-flow"
-import { MetricCard } from "@/components/dashboard/metric-card"
-import { DashboardTabs } from "@/components/dashboard/tabs"
+import { cn } from "@/lib/utils"
 import {
-    DollarSign,
-    ShoppingCart,
-    BarChart2,
-    ArrowUpRight,
-    TrendingUp,
-    Package,
-    Calendar
+    RocketIcon,
+    StoreIcon,
+    TagIcon,
+    LayoutDashboardIcon,
+    LogOut,
 } from "lucide-react"
 import api from "@/lib/api"
 
@@ -35,12 +32,12 @@ interface Brand {
 type DashboardState = "loading" | "no-org" | "no-brand" | "ready"
 
 export default function DashboardPage() {
-    const { user, clearSession } = useAuthStore()
+    const { user, clearSession, activeBrandId, setActiveBrandId } = useAuthStore()
     const router = useRouter()
     const [state, setState] = useState<DashboardState>("loading")
     const [org, setOrg] = useState<Organization | null>(null)
     const [brands, setBrands] = useState<Brand[]>([])
-    const [activeTab, setActiveTab] = useState("Insights")
+    const [activeBrand, setActiveBrand] = useState<Brand | null>(null)
 
     const loadData = async () => {
         try {
@@ -48,13 +45,19 @@ export default function DashboardPage() {
             setOrg(orgRes.data)
 
             const brandsRes = await api.get("/api/brands")
-            setBrands(brandsRes.data)
+            const list: Brand[] = brandsRes.data
+            setBrands(list)
 
-            if (brandsRes.data.length === 0) {
+            if (list.length === 0) {
                 setState("no-brand")
-            } else {
-                setState("ready")
+                return
             }
+
+            // Auto-select first brand; or stick with already-active brand
+            const targetId = activeBrandId ?? list[0].id
+            setActiveBrandId(targetId)
+            setActiveBrand(list.find((b) => b.id === targetId) ?? list[0])
+            setState("ready")
         } catch (err: any) {
             if (err?.response?.status === 404) {
                 setState("no-org")
@@ -63,6 +66,19 @@ export default function DashboardPage() {
                 setState("no-org")
             }
         }
+    }
+
+    // Re-fetch when activeBrandId changes (brand switch)
+    useEffect(() => {
+        if (activeBrandId && brands.length > 0) {
+            const found = brands.find((b) => b.id === activeBrandId)
+            if (found) setActiveBrand(found)
+        }
+    }, [activeBrandId])
+
+    const handleLogout = async () => {
+        await clearSession()
+        router.push("/auth/login")
     }
 
     useEffect(() => {
@@ -79,7 +95,7 @@ export default function DashboardPage() {
 
     if (state === "no-org") {
         return (
-            <div className="fixed inset-0 z-[100] bg-slate-950">
+            <div className="fixed inset-0 z-[100] bg-white">
                 <SetupFlow onComplete={loadData} />
             </div>
         )
@@ -87,152 +103,112 @@ export default function DashboardPage() {
 
     if (state === "no-brand") {
         return (
-            <div className="fixed inset-0 z-[100] bg-slate-950">
+            <div className="fixed inset-0 z-[100] bg-white">
                 <SetupFlow onComplete={loadData} skipToStep={2} />
             </div>
         )
     }
 
-    const activeBrand = brands[0]
-
     return (
-        <div className="p-8 space-y-8 animate-in fade-in duration-500">
+        <div className="p-8 space-y-8">
+            {/* Page heading */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex flex-col gap-4">
-                    <div className="flex items-center gap-2 text-slate-400 text-sm font-medium">
-                        <Calendar className="w-4 h-4" />
-                        <span>19 May - 24 Jul</span>
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-900">Overview</h2>
+                    <p className="text-slate-500 text-sm mt-1">Welcome back, {user?.email}</p>
+                </div>
+                <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all text-sm font-semibold w-fit"
+                >
+                    <LogOut className="w-4 h-4" />
+                    Log out
+                </button>
+            </div>
+
+            {/* Info cards — scoped to activeBrandId */}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow flex items-start gap-5">
+                    <div className="bg-primary/10 p-3 rounded-2xl">
+                        <StoreIcon className="w-6 h-6 text-primary" />
                     </div>
-                    <DashboardTabs
-                        tabs={["Insights", "Operations", "Assets"]}
-                        activeTab={activeTab}
-                        onChange={setActiveTab}
-                    />
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Organization</p>
+                        <p className="text-xl font-bold text-slate-900 truncate">{org?.name}</p>
+                        <p className="text-xs text-slate-400 mt-1 truncate">{org?.owner_email}</p>
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="text-right hidden sm:block">
-                        <p className="text-sm font-bold text-slate-900">{activeBrand.name}</p>
-                        <p className="text-xs font-semibold text-slate-500">{activeBrand.category}</p>
+                <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow flex items-start gap-5">
+                    <div className="bg-violet-100 p-3 rounded-2xl">
+                        <TagIcon className="w-6 h-6 text-violet-600" />
                     </div>
-                    <button className="bg-primary text-white px-5 py-2.5 rounded-2xl font-bold text-sm hover:opacity-90 transition-opacity premium-shadow">
-                        Create Campaign
-                    </button>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Active Brand</p>
+                        <p className="text-xl font-bold text-slate-900 truncate">{activeBrand?.name}</p>
+                        <p className="text-xs text-slate-400 mt-1">{activeBrand?.category}</p>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow flex items-start gap-5">
+                    <div className="bg-emerald-50 p-3 rounded-2xl">
+                        <LayoutDashboardIcon className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Brands</p>
+                        <p className="text-xl font-bold text-slate-900">{brands.length}</p>
+                        <p className="text-xs text-slate-400 mt-1">registered brand{brands.length !== 1 ? "s" : ""}</p>
+                    </div>
                 </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <MetricCard
-                    title="Revenue"
-                    value="$552,7K"
-                    change={3}
-                    trend="up"
-                    icon={<DollarSign className="w-5 h-5" />}
-                />
-                <MetricCard
-                    title="Total orders"
-                    value="2,789K"
-                    change={14}
-                    trend="up"
-                    icon={<ShoppingCart className="w-5 h-5" />}
-                />
-                <MetricCard
-                    title="Gross profit"
-                    value="$370,4K"
-                    change={1.2}
-                    trend="down"
-                    icon={<BarChart2 className="w-5 h-5" />}
-                />
-                <MetricCard
-                    title="Active customers"
-                    value="64,4%"
-                    change={3}
-                    trend="up"
-                    icon={<Users className="w-5 h-5" />}
-                />
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-3">
-                {/* Large Chart Area Placeholder */}
-                <div className="md:col-span-2 bg-white rounded-[32px] p-8 border border-slate-100 premium-shadow min-h-[400px]">
-                    <div className="flex items-center justify-between mb-8">
-                        <h3 className="font-bold text-lg text-slate-900">Income and expenses</h3>
-                        <div className="flex items-center gap-4 text-xs font-bold">
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-2 h-2 rounded-full bg-primary" />
-                                <span className="text-slate-600">Income</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-2 h-2 rounded-full bg-slate-300" />
-                                <span className="text-slate-600">Expenses</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="h-64 mt-12 flex items-end justify-between gap-2">
-                        {[40, 60, 45, 90, 75, 85, 55].map((h, i) => (
-                            <div key={i} className="flex-1 group relative">
-                                <div
-                                    className="bg-slate-50 rounded-2xl w-full transition-all duration-500 hover:bg-primary/10"
-                                    style={{ height: `${h}%` }}
-                                />
-                                <div
-                                    className="absolute bottom-0 left-1/4 right-1/4 bg-primary rounded-t-xl transition-all duration-500 opacity-80 group-hover:opacity-100"
-                                    style={{ height: `${h * 0.7}%` }}
-                                />
+            {/* All brands list (only if more than one) */}
+            {brands.length > 1 && (
+                <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow">
+                    <h3 className="text-sm font-bold text-slate-900 mb-5 uppercase tracking-widest">All Brands</h3>
+                    <div className="divide-y divide-slate-50">
+                        {brands.map((b) => (
+                            <div
+                                key={b.id}
+                                className={cn(
+                                    "flex items-center justify-between py-4 cursor-pointer hover:bg-slate-50 px-2 rounded-xl transition-colors",
+                                )}
+                                onClick={() => setActiveBrandId(b.id)}
+                            >
+                                <div>
+                                    <p className="font-bold text-slate-900 text-sm">{b.name}</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">{b.category}</p>
+                                </div>
+                                <span className={cn(
+                                    "text-[10px] font-bold px-3 py-1 rounded-full",
+                                    b.id === activeBrandId
+                                        ? "bg-primary text-white"
+                                        : "bg-slate-100 text-slate-500"
+                                )}>
+                                    {b.id === activeBrandId ? "Active" : "Switch"}
+                                </span>
                             </div>
                         ))}
                     </div>
-                    <div className="flex justify-between mt-4 text-[11px] font-bold text-slate-400 px-2 uppercase tracking-widest">
-                        <span>May</span>
-                        <span>Jun</span>
-                        <span>Jul</span>
-                        <span>Aug</span>
-                        <span>Sep</span>
-                        <span>Oct</span>
-                        <span>Nov</span>
-                    </div>
                 </div>
+            )}
 
-                {/* Trending Sidebar */}
-                <div className="space-y-6">
-                    <div className="bg-white rounded-[32px] p-6 border border-slate-100 premium-shadow">
-                        <h3 className="font-bold text-slate-900 mb-6 flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4 text-emerald-500" />
-                            Trending products
-                        </h3>
-                        <div className="space-y-4">
-                            {[
-                                { name: "Air conditioner Electrolux", price: "$24,338.7", color: "bg-primary/20", text: "text-primary" },
-                                { name: "Smart watch Apple Watch", price: "$41,877.1", color: "bg-slate-900", text: "text-white" },
-                                { name: "Air cooler Elboom Ocarina", price: "$25,433.2", color: "bg-primary/10", text: "text-primary" },
-                            ].map((p) => (
-                                <div key={p.name} className="flex flex-col gap-1 p-3 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm font-bold text-slate-700 truncate mr-2">{p.name}</span>
-                                        <span className={cn("text-[10px] font-black px-2 py-0.5 rounded-full", p.color, p.text)}>
-                                            {p.price}
-                                        </span>
-                                    </div>
-                                    <div className="h-1.5 w-full bg-slate-100 rounded-full mt-2 overflow-hidden">
-                                        <div className="h-full bg-primary/40 w-2/3" />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+            {/* Sprint 2 coming-soon banner */}
+            <div className={cn(
+                "rounded-[28px] p-8 border border-primary/20 bg-primary/5 relative overflow-hidden"
+            )}>
+                <div className="absolute top-0 right-0 w-48 h-48 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
+                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-6">
+                    <div className="bg-primary p-4 rounded-3xl">
+                        <RocketIcon className="w-8 h-8 text-white" />
                     </div>
-
-                    <div className="bg-slate-900 rounded-[32px] p-6 premium-shadow text-white relative overflow-hidden">
-                        <div className="relative z-10">
-                            <div className="bg-white/10 w-fit p-2 rounded-xl mb-4">
-                                <Package className="w-5 h-5 text-white" />
-                            </div>
-                            <h3 className="font-bold text-lg mb-2">Inventory Alerts</h3>
-                            <p className="text-slate-400 text-xs mb-4">4 products are running low on stock. Check reports.</p>
-                            <button className="text-xs font-bold underline decoration-primary underline-offset-4 hover:text-primary transition-colors">
-                                View Assets →
-                            </button>
-                        </div>
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+                    <div className="flex-1">
+                        <h3 className="text-lg font-bold text-primary">
+                            🚀 {activeBrand?.name} is set up — Analytics coming in Sprint 2!
+                        </h3>
+                        <p className="text-slate-500 text-sm mt-1">
+                            Your AI-powered sales insights, revenue charts, and product performance will appear right here.
+                        </p>
                     </div>
                 </div>
             </div>

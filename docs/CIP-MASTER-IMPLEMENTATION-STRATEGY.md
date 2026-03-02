@@ -450,6 +450,38 @@ weekly_digests
 - Frontend: after login, if no organization exists, show setup flow (organization name → first brand name → category)
 - Test: create an org, create a brand, confirm it's stored and returned correctly
 
+### MULTI-BRAND ACCOUNT MODEL — CORE DESIGN PRINCIPLE
+
+**This is not a Sprint 0 build task. It is a permanent architectural rule that governs every sprint.**
+
+One ORYNT account = one organization = unlimited brands. A user never needs multiple accounts to manage multiple brands. Every brand they own lives under one login.
+
+**How it works:**
+- One email and password logs into one organization
+- That organization can have 1 brand or 100 brands
+- Every page in the dashboard is scoped to the currently selected brand
+- A brand switcher in the sidebar header lets the user switch between their brands instantly
+- When switching brands, all data — SKU scores, customers, orders, integrations — updates to the selected brand
+- Adding a new brand is a single action: Settings → Add Brand → name, category, done
+
+**Brand switcher UI (visible from Sprint 1 onwards):**
+- Shown in the sidebar, below the ORYNT logo
+- Displays the currently active brand name
+- Click to open dropdown of all brands in the organization
+- If organization has only one brand: show brand name but no dropdown
+- "Add New Brand" always visible at the bottom of the dropdown
+- Never require logout and re-login to switch brands
+
+**RLS enforcement:**
+- Every API call includes the active brand_id
+- Supabase RLS ensures users can only access brands within their own organization
+- Switching brands on the frontend changes the brand_id in the Zustand store and re-fetches all data
+
+**Multi-brand intelligence view (Sprint 7):**
+- Once a user has 2+ brands, a Portfolio Overview page becomes available
+- Shows all brands side by side with health scores, revenue, and priority actions
+- Built in Sprint 7, not now — but the architecture supports it from day one
+
 **Sprint 0 is complete when:** A real user can sign up, create their organization and first brand, and the infrastructure is deployed and stable on Netcup VPS.
 
 ---
@@ -1003,10 +1035,22 @@ This is the manual order logging feature for sellers who receive orders via What
 
 ### 1.11 Meta Ads Integration
 - Meta Business Login OAuth flow
+- Scopes: ads_read, business_management
 - Access Meta Marketing API
 - Pull ad account performance: campaigns, ad sets, ads, spend, impressions, clicks, CPM, CPC, ROAS per day
-- Store in `ad_campaigns` table
-- Daily sync job (ads data doesn't need real-time, daily is sufficient)
+- Store in ad_campaigns table with platform = 'meta'
+- Daily sync job at 6:00 AM WAT (ads data does not need real-time)
+
+### 1.11a Google Ads Integration
+- Google OAuth 2.0 flow using Google Ads API
+- Scopes: https://www.googleapis.com/auth/adwords
+- Developer token required (apply at Google Ads API center)
+- Pull campaign performance: campaigns, ad groups, ads, spend, impressions, clicks, CPC, ROAS per day
+- Use Google Ads Query Language (GAQL) to fetch metrics from the reports endpoint
+- Store in ad_campaigns table with platform = 'google'
+- Link Google Ads conversions to ORYNT orders where possible (via gclid in order metadata)
+- Daily sync job at 6:30 AM WAT
+- Add google_ads to the integrations type enum if not already present
 
 ### 1.12 Instagram Business + Facebook Page Integration
 - Via Meta Graph API

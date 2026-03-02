@@ -3,6 +3,7 @@ import { Session, User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
 
 interface AuthState {
+    // Auth
     user: User | null
     session: Session | null
     isLoading: boolean
@@ -10,9 +11,14 @@ interface AuthState {
     setSession: (session: Session | null) => void
     setLoading: (loading: boolean) => void
     clearSession: () => Promise<void>
+
+    // Multi-brand
+    activeBrandId: string | null
+    setActiveBrandId: (brandId: string | null) => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
+    // Auth
     user: null,
     session: null,
     isLoading: true,
@@ -27,8 +33,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     setLoading: (isLoading) => set({ isLoading }),
     clearSession: async () => {
         await supabase.auth.signOut()
-        set({ user: null, session: null, isAuthenticated: false, isLoading: false })
+        set({
+            user: null,
+            session: null,
+            isAuthenticated: false,
+            isLoading: false,
+            activeBrandId: null,
+        })
     },
+
+    // Multi-brand
+    activeBrandId: null,
+    setActiveBrandId: (activeBrandId) => set({ activeBrandId }),
 }))
 
 // Initialization logic to hydrate the store from Supabase
