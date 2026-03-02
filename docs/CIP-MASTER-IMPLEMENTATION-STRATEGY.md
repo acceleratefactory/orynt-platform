@@ -60,8 +60,8 @@ Hard boundaries. Never cross these regardless of how good the idea sounds:
 - **File storage:** Supabase Storage (for CSV uploads, PDF exports)
 
 ### Infrastructure
-- **Application hosting:** Railway.app (frontend + backend deployed here)
-- **Database:** Supabase (separate from Railway)
+- **Application hosting:** Netcup VPS (frontend + backend deployed here — root server with guaranteed CPU/RAM/SSD, German hosting, GDPR compliant, proven stable)
+- **Database:** Supabase (separate from Netcup VPS)
 - **Cache:** Upstash Redis
 - **Migration to AWS:** When first fintech contract is signed and data residency in Africa is required
 
@@ -423,7 +423,7 @@ weekly_digests
 - Connect to Supabase PostgreSQL via SQLAlchemy
 - Create health check endpoint: `GET /health` returns `{"status": "ok", "database": "connected"}`
 - Set up Alembic for database migrations
-- Deploy to Railway. Confirm health check returns 200 from Railway URL.
+- Deploy to Netcup VPS. Confirm health check returns 200 from the server's public IP or domain.
 
 ### 0.4 Frontend Setup
 - Initialize Next.js 14 project in `/frontend` with App Router
@@ -431,7 +431,7 @@ weekly_digests
 - Initialize shadcn/ui component library
 - Create environment variable for backend API URL
 - Create a single test page that calls the backend health check and displays "Connected"
-- Deploy to Railway. Confirm it loads and shows "Connected".
+- Deploy to Netcup VPS. Confirm it loads and shows "Connected".
 
 ### 0.5 Redis Setup
 - Create Upstash Redis instance
@@ -450,7 +450,7 @@ weekly_digests
 - Frontend: after login, if no organization exists, show setup flow (organization name → first brand name → category)
 - Test: create an org, create a brand, confirm it's stored and returned correctly
 
-**Sprint 0 is complete when:** A real user can sign up, create their organization and first brand, and the infrastructure is deployed and stable on Railway.
+**Sprint 0 is complete when:** A real user can sign up, create their organization and first brand, and the infrastructure is deployed and stable on Netcup VPS.
 
 ---
 

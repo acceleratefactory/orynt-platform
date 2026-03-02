@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()  # Load .env before anything else imports os.getenv()
 
 from fastapi import FastAPI
-from app.routers import health
+from app.routers import health, auth
 
 app = FastAPI(
     title="ORYNT API",
@@ -19,6 +19,7 @@ app = FastAPI(
 
 # ─── Routers ────────────────────────────────────────────────────────────────
 app.include_router(health.router, tags=["Health"])
+app.include_router(auth.router)
 
 # ─── Root ───────────────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)

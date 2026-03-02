@@ -14,21 +14,28 @@ from jose import jwt, JWTError
 JWT_SECRET = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
-def require_auth(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> dict:
     """
     Dependency that validates a Supabase JWT token.
     Returns the decoded payload (contains 'sub' = user UUID, 'email', etc.)
-    Raises 401 if the token is invalid or expired.
+    Raises 401 if the token is missing, invalid or expired.
     """
     if not JWT_SECRET:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="JWT_SECRET environment variable is not configured.",
+        )
+
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token is missing.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     token = credentials.credentials
@@ -50,7 +57,7 @@ def require_auth(
         ) from exc
 
 
-def get_current_user_email(payload: dict = Depends(require_auth)) -> str:
+def get_current_user_email(payload: dict = Depends(get_current_user)) -> str:
     """Returns the authenticated user's email from the JWT payload."""
     email = payload.get("email")
     if not email:
@@ -61,7 +68,7 @@ def get_current_user_email(payload: dict = Depends(require_auth)) -> str:
     return email
 
 
-def get_current_user_id(payload: dict = Depends(require_auth)) -> str:
+def get_current_user_id(payload: dict = Depends(get_current_user)) -> str:
     """Returns the authenticated user's UUID (sub claim) from the JWT payload."""
     user_id = payload.get("sub")
     if not user_id:

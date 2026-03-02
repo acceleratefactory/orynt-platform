@@ -1,26 +1,52 @@
 import { create } from "zustand"
-
-interface User {
-    id: string
-    email: string
-}
+import { Session, User } from "@supabase/supabase-js"
+import { supabase } from "@/lib/supabase"
 
 interface AuthState {
     user: User | null
-    token: string | null
+    session: Session | null
     isLoading: boolean
-    setUser: (user: User | null) => void
-    setToken: (token: string | null) => void
+    isAuthenticated: boolean
+    setSession: (session: Session | null) => void
     setLoading: (loading: boolean) => void
-    logout: () => void
+    clearSession: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
     user: null,
-    token: null,
+    session: null,
     isLoading: true,
-    setUser: (user) => set({ user }),
-    setToken: (token) => set({ token }),
+    isAuthenticated: false,
+    setSession: (session) =>
+        set({
+            session,
+            user: session?.user ?? null,
+            isAuthenticated: !!session,
+            isLoading: false,
+        }),
     setLoading: (isLoading) => set({ isLoading }),
-    logout: () => set({ user: null, token: null }),
+    clearSession: async () => {
+        await supabase.auth.signOut()
+        set({ user: null, session: null, isAuthenticated: false, isLoading: false })
+    },
 }))
+
+// Initialization logic to hydrate the store from Supabase
+export const initAuth = async () => {
+    const { setSession, setLoading } = useAuthStore.getState()
+
+    try {
+        const { data: { session } } = await supabase.auth.getSession()
+        setSession(session)
+    } catch (error) {
+        console.error("Error hydrating auth session:", error)
+        setSession(null)
+    } finally {
+        setLoading(false)
+    }
+
+    // Listen for auth state changes
+    supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session)
+    })
+}
