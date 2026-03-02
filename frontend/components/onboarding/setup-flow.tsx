@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 import api from "@/lib/api"
 
 const CATEGORIES = [
@@ -75,51 +76,51 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
     }
 
     return (
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-white flex items-center justify-center p-4">
             <div className="w-full max-w-lg space-y-6">
                 {/* Progress indicator */}
                 <div className="flex items-center gap-3 justify-center">
-                    <div className={`h-2 w-24 rounded-full ${step >= 1 ? "bg-emerald-500" : "bg-slate-700"}`} />
-                    <div className={`h-2 w-24 rounded-full ${step === 2 ? "bg-emerald-500" : "bg-slate-700"}`} />
+                    <div className={cn("h-2 w-24 rounded-full transition-colors", step >= 1 ? "bg-primary" : "bg-slate-100")} />
+                    <div className={cn("h-2 w-24 rounded-full transition-colors", step === 2 ? "bg-primary" : "bg-slate-100")} />
                 </div>
-                <p className="text-center text-slate-400 text-sm">Step {step} of 2</p>
+                <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Step {step} of 2</p>
 
                 {step === 1 ? (
-                    <Card className="bg-slate-900 border-slate-800 text-white">
-                        <CardHeader>
-                            <CardTitle className="text-2xl">Set up your organization</CardTitle>
-                            <CardDescription className="text-slate-400">
+                    <Card className="premium-shadow border-none rounded-[32px] overflow-hidden bg-white">
+                        <CardHeader className="pt-10 px-10 text-center">
+                            <CardTitle className="text-3xl font-bold text-slate-900">Set up your organization</CardTitle>
+                            <CardDescription className="text-slate-500 mt-2">
                                 This is your business account. You can have multiple brands under it.
                             </CardDescription>
                         </CardHeader>
                         <form onSubmit={handleOrgSubmit}>
-                            <CardContent className="space-y-4">
+                            <CardContent className="space-y-6 px-10 pb-8">
                                 <div className="space-y-2">
-                                    <Label htmlFor="org-name">Business / Organization name</Label>
+                                    <Label htmlFor="org-name" className="text-slate-700 font-bold">Business / Organization name</Label>
                                     <Input
                                         id="org-name"
                                         placeholder="e.g. Kemi's Fashion House"
                                         value={orgName}
                                         onChange={(e) => setOrgName(e.target.value)}
                                         required
-                                        className="bg-slate-950 border-slate-800"
+                                        className="h-12 bg-slate-50 border-none rounded-2xl focus-visible:ring-primary/20"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="phone">Phone number <span className="text-slate-500 text-xs">(optional)</span></Label>
+                                    <Label htmlFor="phone" className="text-slate-700 font-bold">Phone number <span className="text-slate-400 font-normal text-xs ml-1">(Optional)</span></Label>
                                     <Input
                                         id="phone"
                                         placeholder="+234 800 000 0000"
                                         value={phone}
                                         onChange={(e) => setPhone(e.target.value)}
-                                        className="bg-slate-950 border-slate-800"
+                                        className="h-12 bg-slate-50 border-none rounded-2xl focus-visible:ring-primary/20"
                                     />
                                 </div>
                             </CardContent>
-                            <CardFooter>
+                            <CardFooter className="px-10 pb-10">
                                 <Button
                                     type="submit"
-                                    className="w-full bg-emerald-600 hover:bg-emerald-700"
+                                    className="w-full h-12 bg-primary hover:opacity-90 transition-opacity text-white font-bold rounded-2xl premium-shadow"
                                     disabled={loading}
                                 >
                                     {loading ? "Saving..." : "Continue →"}
@@ -128,33 +129,33 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
                         </form>
                     </Card>
                 ) : (
-                    <Card className="bg-slate-900 border-slate-800 text-white">
-                        <CardHeader>
-                            <CardTitle className="text-2xl">Create your first brand</CardTitle>
-                            <CardDescription className="text-slate-400">
+                    <Card className="premium-shadow border-none rounded-[32px] overflow-hidden bg-white">
+                        <CardHeader className="pt-10 px-10 text-center">
+                            <CardTitle className="text-3xl font-bold text-slate-900">Create your first brand</CardTitle>
+                            <CardDescription className="text-slate-500 mt-2">
                                 A brand is the product line or store you want ORYNT to analyse.
                             </CardDescription>
                         </CardHeader>
                         <form onSubmit={handleBrandSubmit}>
-                            <CardContent className="space-y-4">
+                            <CardContent className="space-y-6 px-10 pb-8">
                                 <div className="space-y-2">
-                                    <Label htmlFor="brand-name">Brand name</Label>
+                                    <Label htmlFor="brand-name" className="text-slate-700 font-bold">Brand name</Label>
                                     <Input
                                         id="brand-name"
                                         placeholder="e.g. KemiFashion"
                                         value={brandName}
                                         onChange={(e) => setBrandName(e.target.value)}
                                         required
-                                        className="bg-slate-950 border-slate-800"
+                                        className="h-12 bg-slate-50 border-none rounded-2xl focus-visible:ring-primary/20"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="category">Category</Label>
+                                    <Label htmlFor="category" className="text-slate-700 font-bold">Category</Label>
                                     <select
                                         id="category"
                                         value={category}
                                         onChange={(e) => setCategory(e.target.value)}
-                                        className="w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        className="w-full h-12 rounded-2xl border-none bg-slate-50 px-4 text-slate-900 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none"
                                         required
                                     >
                                         <option value="" disabled>Select a category…</option>
@@ -164,12 +165,12 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
                                     </select>
                                 </div>
                             </CardContent>
-                            <CardFooter className="flex gap-3">
+                            <CardFooter className="px-10 pb-10 flex gap-3">
                                 {skipToStep !== 2 && (
                                     <Button
                                         type="button"
-                                        variant="outline"
-                                        className="border-slate-800 text-slate-400"
+                                        variant="ghost"
+                                        className="h-12 border-none text-slate-500 font-bold rounded-2xl"
                                         onClick={() => setStep(1)}
                                     >
                                         Back
@@ -177,7 +178,7 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
                                 )}
                                 <Button
                                     type="submit"
-                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                                    className="flex-1 h-12 bg-primary hover:opacity-90 transition-opacity text-white font-bold rounded-2xl premium-shadow"
                                     disabled={loading}
                                 >
                                     {loading ? "Creating..." : "Create My Brand"}
