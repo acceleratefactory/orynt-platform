@@ -1,30 +1,62 @@
 "use client"
 
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/auth"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { SetupFlow } from "@/components/onboarding/setup-flow"
 import api from "@/lib/api"
+
+interface Organization {
+    id: string
+    name: string
+    owner_email: string
+    owner_phone: string | null
+    created_at: string
+}
+
+interface Brand {
+    id: string
+    name: string
+    category: string
+    organization_id: string
+}
+
+type DashboardState = "loading" | "no-org" | "no-brand" | "ready"
 
 export default function DashboardPage() {
     const { user, clearSession } = useAuthStore()
     const router = useRouter()
-    const [backendUser, setBackendUser] = useState<any>(null)
-    const [loading, setLoading] = useState(true)
+    const [state, setState] = useState<DashboardState>("loading")
+    const [org, setOrg] = useState<Organization | null>(null)
+    const [brands, setBrands] = useState<Brand[]>([])
 
-    useEffect(() => {
-        async function fetchMe() {
-            try {
-                const response = await api.get("/auth/me")
-                setBackendUser(response.data)
-            } catch (error) {
-                console.error("Failed to fetch backend user:", error)
-            } finally {
-                setLoading(false)
+    const loadData = async () => {
+        try {
+            const orgRes = await api.get("/api/organizations/me")
+            setOrg(orgRes.data)
+
+            const brandsRes = await api.get("/api/brands")
+            setBrands(brandsRes.data)
+
+            if (brandsRes.data.length === 0) {
+                setState("no-brand")
+            } else {
+                setState("ready")
+            }
+        } catch (err: any) {
+            if (err?.response?.status === 404) {
+                setState("no-org")
+            } else {
+                console.error("Dashboard load error:", err)
+                setState("no-org")
             }
         }
-        fetchMe()
+    }
+
+    useEffect(() => {
+        loadData()
     }, [])
 
     const handleLogout = async () => {
@@ -32,11 +64,33 @@ export default function DashboardPage() {
         router.push("/auth/login")
     }
 
+    if (state === "loading") {
+        return (
+            <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-emerald-500" />
+            </div>
+        )
+    }
+
+    if (state === "no-org") {
+        return <SetupFlow onComplete={loadData} />
+    }
+
+    if (state === "no-brand") {
+        return <SetupFlow onComplete={loadData} skipToStep={2} />
+    }
+
+    // state === "ready" — show the placeholder dashboard
+    const activeBrand = brands[0]
+
     return (
         <div className="min-h-screen bg-slate-950 text-white p-8">
             <div className="max-w-4xl mx-auto space-y-8">
                 <div className="flex justify-between items-center">
-                    <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+                        <p className="text-slate-400 mt-1 text-sm">{org?.name}</p>
+                    </div>
                     <Button
                         variant="outline"
                         onClick={handleLogout}
@@ -46,66 +100,46 @@ export default function DashboardPage() {
                     </Button>
                 </div>
 
-                <div className="grid gap-6 md:grid-cols-2">
-                    {/* Frontend Session Info */}
+                {/* Brand card */}
+                <div className="grid gap-6 md:grid-cols-3">
                     <Card className="bg-slate-900 border-slate-800 text-white">
                         <CardHeader>
-                            <CardTitle>Frontend Session</CardTitle>
-                            <CardDescription className="text-slate-400">
-                                Data from Zustand / Supabase Auth
-                            </CardDescription>
+                            <CardTitle className="text-sm text-slate-400 uppercase tracking-widest">Active Brand</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                                <span className="text-slate-400">Email:</span>
-                                <span className="font-mono">{user?.email}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-slate-400">User ID:</span>
-                                <span className="font-mono text-[10px] sm:text-xs">{user?.id}</span>
-                            </div>
+                        <CardContent>
+                            <p className="text-2xl font-bold">{activeBrand.name}</p>
+                            <p className="text-slate-400 text-sm mt-1">{activeBrand.category}</p>
                         </CardContent>
                     </Card>
 
-                    {/* Backend Verification Info */}
                     <Card className="bg-slate-900 border-slate-800 text-white">
                         <CardHeader>
-                            <CardTitle>Backend Verification</CardTitle>
-                            <CardDescription className="text-slate-400">
-                                Verified via JWT on FastAPI /auth/me
-                            </CardDescription>
+                            <CardTitle className="text-sm text-slate-400 uppercase tracking-widest">Organization</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
-                            {loading ? (
-                                <div className="animate-pulse flex space-x-4">
-                                    <div className="flex-1 space-y-4 py-1">
-                                        <div className="h-4 bg-slate-800 rounded w-3/4"></div>
-                                        <div className="h-4 bg-slate-800 rounded"></div>
-                                    </div>
-                                </div>
-                            ) : backendUser ? (
-                                <>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-slate-400">Authenticated:</span>
-                                        <span className="text-emerald-500 font-semibold">Yes ✅</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-slate-400">Backend Email:</span>
-                                        <span className="font-mono">{backendUser.email}</span>
-                                    </div>
-                                </>
-                            ) : (
-                                <p className="text-red-400 text-sm">Failed to verify with backend.</p>
-                            )}
+                        <CardContent>
+                            <p className="text-2xl font-bold">{org?.name}</p>
+                            <p className="text-slate-400 text-sm mt-1">{user?.email}</p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-slate-900 border-slate-800 text-white">
+                        <CardHeader>
+                            <CardTitle className="text-sm text-slate-400 uppercase tracking-widest">Brands</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-2xl font-bold">{brands.length}</p>
+                            <p className="text-slate-400 text-sm mt-1">registered brand{brands.length !== 1 ? "s" : ""}</p>
                         </CardContent>
                     </Card>
                 </div>
 
-                <div className="bg-emerald-950/20 border border-emerald-900/50 rounded-lg p-6">
-                    <h3 className="text-emerald-500 font-semibold mb-2">Auth Flow Verified!</h3>
-                    <p className="text-slate-400 text-sm leading-relaxed">
-                        You are currently on a protected route. Refreshing this page will hydrate the session from local storage.
-                        Logging out will clear the session and redirect you back to the login screen.
+                {/* Sprint 2 placeholder */}
+                <div className="bg-emerald-950/20 border border-emerald-900/50 rounded-lg p-8 text-center">
+                    <h3 className="text-emerald-400 font-semibold text-lg mb-2">
+                        🚀 {activeBrand.name} is set up!
+                    </h3>
+                    <p className="text-slate-400 text-sm">
+                        Full analytics dashboard and AI-powered insights are coming in Sprint 2.
                     </p>
                 </div>
             </div>
