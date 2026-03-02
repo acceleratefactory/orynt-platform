@@ -4,7 +4,10 @@ Connects to Upstash Redis (or any Redis instance) via REDIS_URL env var.
 Used for caching SKU scores, customer segments, and weekly digests.
 """
 
+import json
 import os
+from typing import Any
+
 import redis as redis_client
 from dotenv import load_dotenv
 from redis.exceptions import RedisError
@@ -34,11 +37,55 @@ def get_redis() -> redis_client.Redis:
     return _redis
 
 
-def check_cache_connection() -> bool:
-    """Health check — returns True if Redis is reachable, False otherwise."""
+def cache_set(key: str, value: Any, ttl_seconds: int = 300) -> bool:
+    """
+    Write a value to Redis with an expiry.
+
+    - key:         Redis key (e.g. "orynt:sku:score:123")
+    - value:       Any JSON-serialisable value
+    - ttl_seconds: Time-to-live in seconds (default 5 minutes)
+
+    Returns True on success, False on error.
+    """
     try:
         r = get_redis()
-        r.ping()
+        serialised = json.dumps(value) if not isinstance(value, str) else value
+        r.setex(key, ttl_seconds, serialised)
         return True
+    except (RedisError, ValueError, Exception):
+        return False
+
+
+def cache_get(key: str) -> Any | None:
+    """
+    Read a value from Redis by key.
+
+    Returns the deserialised value, or None if the key does not exist
+    or an error occurs.
+    """
+    try:
+        r = get_redis()
+        raw = r.get(key)
+        if raw is None:
+            return None
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return raw  # Return raw string if not valid JSON
+    except (RedisError, ValueError, Exception):
+        return None
+
+
+def check_cache_connection() -> bool:
+    """
+    Health check — writes a test key then reads it back.
+    Returns True only if both write AND read succeed (full round-trip).
+    """
+    try:
+        wrote = cache_set("orynt:health:test", "ok", ttl_seconds=60)
+        if not wrote:
+            return False
+        result = cache_get("orynt:health:test")
+        return result == "ok"
     except (RedisError, ValueError, Exception):
         return False
