@@ -14,52 +14,68 @@ interface Integration {
     created_at: string
 }
 
+// ── Gateway config ────────────────────────────────────────────────────────────
+
+const GATEWAYS = {
+    paystack: {
+        label: "Paystack",
+        description: "Payment gateway — Nigeria, Ghana, South Africa",
+        endpoint: "/api/integrations/paystack/connect",
+        fields: [
+            { name: "secret_key", label: "Secret Key", placeholder: "sk_live_... or sk_test_...", type: "password" },
+        ],
+        hint: "Paystack Dashboard → Settings → API Keys & Webhooks",
+    },
+    flutterwave: {
+        label: "Flutterwave",
+        description: "Payment gateway — Pan-African, 30+ currencies",
+        endpoint: "/api/integrations/flutterwave/connect",
+        fields: [
+            { name: "secret_key", label: "Secret Key", placeholder: "FLWSECK_TEST-... or FLWSECK-...", type: "password" },
+        ],
+        hint: "Flutterwave Dashboard → Settings → API Keys",
+    },
+    monnify: {
+        label: "Monnify (Moniepoint)",
+        description: "Payment gateway — Nigeria bank transfers & cards",
+        endpoint: "/api/integrations/monnify/connect",
+        fields: [
+            { name: "api_key", label: "API Key", placeholder: "MK_TEST_... or MK_PROD_...", type: "password" },
+            { name: "secret_key", label: "Secret Key", placeholder: "Your Monnify secret key", type: "password" },
+            { name: "contract_code", label: "Contract Code", placeholder: "e.g. 7984598283", type: "text" },
+        ],
+        hint: "Monnify Dashboard → Settings → API Keys",
+    },
+} as const
+
+type GatewayKey = keyof typeof GATEWAYS
+
+// ── Connect Modal ─────────────────────────────────────────────────────────────
+
 interface ConnectModalProps {
-    gateway: "paystack" | "flutterwave"
+    gateway: GatewayKey
     onClose: () => void
     onSuccess: () => void
     brandId: string
 }
 
-const GATEWAY_META = {
-    paystack: {
-        label: "Paystack",
-        placeholder: "sk_live_... or sk_test_...",
-        hint: "Find this in Paystack Dashboard → Settings → API Keys & Webhooks",
-        keyPrefix: "sk_",
-        endpoint: "/api/integrations/paystack/connect",
-    },
-    flutterwave: {
-        label: "Flutterwave",
-        placeholder: "FLWSECK_TEST-... or FLWSECK-...",
-        hint: "Find this in Flutterwave Dashboard → Settings → API Keys",
-        keyPrefix: "FLW",
-        endpoint: "/api/integrations/flutterwave/connect",
-    },
-}
-
 function ConnectModal({ gateway, onClose, onSuccess, brandId }: ConnectModalProps) {
-    const meta = GATEWAY_META[gateway]
-    const [secretKey, setSecretKey] = useState("")
+    const meta = GATEWAYS[gateway]
+    const [values, setValues] = useState<Record<string, string>>({})
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
     const [success, setSuccess] = useState(false)
 
     const handleConnect = async (e: React.FormEvent) => {
         e.preventDefault()
-        const trimmed = secretKey.trim()
-        if (!trimmed.startsWith(meta.keyPrefix)) {
-            setError(`Key must start with "${meta.keyPrefix}..."`)
-            return
-        }
         setLoading(true)
         setError("")
         try {
-            await api.post(meta.endpoint, { secret_key: trimmed, brand_id: brandId })
+            await api.post(meta.endpoint, { ...values, brand_id: brandId })
             setSuccess(true)
             setTimeout(() => { onSuccess(); onClose() }, 1800)
         } catch (err: any) {
-            setError(err?.response?.data?.detail || "Failed to connect. Check your key and try again.")
+            setError(err?.response?.data?.detail || "Failed to connect. Check your credentials and try again.")
         } finally {
             setLoading(false)
         }
@@ -73,8 +89,12 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: ConnectModalProp
                         <Zap className="w-5 h-5" style={{ color: "var(--color-accent)" }} />
                     </div>
                     <div>
-                        <h2 className="text-base font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Connect {meta.label}</h2>
-                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Your key is encrypted and stored securely</p>
+                        <h2 className="text-base font-bold font-display" style={{ color: "var(--color-text-primary)" }}>
+                            Connect {meta.label}
+                        </h2>
+                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>
+                            Your credentials are encrypted and stored securely
+                        </p>
                     </div>
                 </div>
 
@@ -83,47 +103,56 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: ConnectModalProp
                         <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: "var(--color-accent)" }} />
                         <div>
                             <p className="text-sm font-semibold font-body" style={{ color: "var(--color-accent)" }}>Connected successfully!</p>
-                            <p className="text-xs font-body" style={{ color: "var(--color-text-secondary)" }}>Historical sync has started in the background.</p>
+                            <p className="text-xs font-body" style={{ color: "var(--color-text-secondary)" }}>Historical sync started in the background.</p>
                         </div>
                     </div>
                 ) : (
                     <form onSubmit={handleConnect} className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="block text-xs font-semibold font-body" style={{ color: "var(--color-text-secondary)" }}>
-                                {meta.label} Secret Key
-                            </label>
-                            <input
-                                type="password"
-                                placeholder={meta.placeholder}
-                                value={secretKey}
-                                onChange={e => setSecretKey(e.target.value)}
-                                required
-                                className="w-full h-11 px-4 rounded-xl text-sm font-mono outline-none transition-shadow"
-                                style={{
-                                    backgroundColor: "var(--color-surface-raised)",
-                                    border: "1px solid var(--color-border)",
-                                    color: "var(--color-text-primary)",
-                                    caretColor: "var(--color-accent)",
-                                }}
-                                onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 2px var(--color-accent-border)"}
-                                onBlur={e => e.currentTarget.style.boxShadow = "none"}
-                            />
-                            <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{meta.hint}</p>
-                        </div>
+                        {meta.fields.map(field => (
+                            <div key={field.name} className="space-y-1.5">
+                                <label className="block text-xs font-semibold font-body"
+                                    style={{ color: "var(--color-text-secondary)" }}>
+                                    {field.label}
+                                </label>
+                                <input
+                                    type={field.type}
+                                    placeholder={field.placeholder}
+                                    value={values[field.name] ?? ""}
+                                    onChange={e => setValues(v => ({ ...v, [field.name]: e.target.value }))}
+                                    required
+                                    className="w-full h-11 px-4 rounded-xl text-sm font-mono outline-none transition-shadow"
+                                    style={{
+                                        backgroundColor: "var(--color-surface-raised)",
+                                        border: "1px solid var(--color-border)",
+                                        color: "var(--color-text-primary)",
+                                        caretColor: "var(--color-accent)",
+                                    }}
+                                    onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 2px var(--color-accent-border)"}
+                                    onBlur={e => e.currentTarget.style.boxShadow = "none"}
+                                />
+                            </div>
+                        ))}
+
+                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>
+                            {meta.hint}
+                        </p>
 
                         {error && (
-                            <div className="flex items-start gap-2 p-3 rounded-xl text-xs font-body" style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444" }}>
+                            <div className="flex items-start gap-2 p-3 rounded-xl text-xs font-body"
+                                style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444" }}>
                                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                                 {error}
                             </div>
                         )}
 
                         <div className="flex gap-3 pt-1">
-                            <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl text-sm font-semibold font-body transition-colors"
+                            <button type="button" onClick={onClose}
+                                className="flex-1 h-11 rounded-xl text-sm font-semibold font-body transition-colors"
                                 style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>
                                 Cancel
                             </button>
-                            <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl text-sm font-bold font-body transition-opacity disabled:opacity-60"
+                            <button type="submit" disabled={loading}
+                                className="flex-1 h-11 rounded-xl text-sm font-bold font-body transition-opacity disabled:opacity-60"
                                 style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
                                 {loading ? "Connecting..." : `Connect ${meta.label}`}
                             </button>
@@ -135,20 +164,21 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: ConnectModalProp
     )
 }
 
-interface GatewayCardProps {
-    name: string
-    description: string
+// ── Gateway Card ──────────────────────────────────────────────────────────────
+
+function GatewayCard({
+    gatewayKey, integration, onConnect, available,
+}: {
+    gatewayKey: GatewayKey
     integration: Integration | undefined
     onConnect: () => void
     available: boolean
-}
-
-function GatewayCard({ name, description, integration, onConnect, available }: GatewayCardProps) {
+}) {
+    const meta = GATEWAYS[gatewayKey]
     const connected = integration?.status === "connected"
-    const formatDate = (iso: string | null) => {
-        if (!iso) return "Never"
-        return new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })
-    }
+    const fmt = (iso: string | null) => iso
+        ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })
+        : "Never"
 
     return (
         <div className={`rounded-2xl p-6 ${!available ? "opacity-50" : ""}`}
@@ -156,12 +186,15 @@ function GatewayCard({ name, description, integration, onConnect, available }: G
             <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold"
-                        style={{ backgroundColor: connected ? "rgba(0,201,167,0.1)" : "var(--color-surface-raised)", color: connected ? "var(--color-accent)" : "var(--color-text-muted)", fontFamily: "var(--font-display)" }}>
-                        {name[0]}
+                        style={{
+                            backgroundColor: connected ? "rgba(0,201,167,0.1)" : "var(--color-surface-raised)",
+                            color: connected ? "var(--color-accent)" : "var(--color-text-muted)",
+                        }}>
+                        {meta.label[0]}
                     </div>
                     <div>
-                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>{name}</h3>
-                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>{description}</p>
+                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>{meta.label}</h3>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>{meta.description}</p>
                     </div>
                 </div>
                 {connected ? (
@@ -187,7 +220,7 @@ function GatewayCard({ name, description, integration, onConnect, available }: G
                     <div className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
                         <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Last synced</p>
                         <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>
-                            {formatDate(integration!.last_sync_at)}
+                            {fmt(integration!.last_sync_at)}
                         </p>
                     </div>
                     <div className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
@@ -211,7 +244,7 @@ function GatewayCard({ name, description, integration, onConnect, available }: G
                         <button onClick={onConnect}
                             className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body transition-opacity"
                             style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
-                            <Plus className="w-4 h-4" /> Connect {name}
+                            <Plus className="w-4 h-4" /> Connect {meta.label}
                         </button>
                     )}
                 </div>
@@ -220,10 +253,12 @@ function GatewayCard({ name, description, integration, onConnect, available }: G
     )
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function IntegrationsPage() {
     const { activeBrandId } = useAuthStore()
     const [integrations, setIntegrations] = useState<Integration[]>([])
-    const [modal, setModal] = useState<"paystack" | "flutterwave" | null>(null)
+    const [modal, setModal] = useState<GatewayKey | null>(null)
 
     const load = async () => {
         if (!activeBrandId) return
@@ -242,33 +277,28 @@ export default function IntegrationsPage() {
     return (
         <div className="p-8 max-w-3xl space-y-6">
             <div>
-                <h1 className="text-2xl font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Integrations</h1>
+                <h1 className="text-2xl font-bold font-display" style={{ color: "var(--color-text-primary)" }}>
+                    Integrations
+                </h1>
                 <p className="mt-1 text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
                     Connect your payment gateways to automatically import orders and customers.
                 </p>
             </div>
 
-            <GatewayCard
-                name="Paystack"
-                description="Payment gateway — Nigeria, Ghana, South Africa"
-                integration={find("paystack")}
-                onConnect={() => setModal("paystack")}
-                available={true}
-            />
+            {(["paystack", "flutterwave", "monnify"] as GatewayKey[]).map(key => (
+                <GatewayCard
+                    key={key}
+                    gatewayKey={key}
+                    integration={find(key)}
+                    onConnect={() => setModal(key)}
+                    available={true}
+                />
+            ))}
 
-            <GatewayCard
-                name="Flutterwave"
-                description="Payment gateway — Pan-African, 30+ currencies"
-                integration={find("flutterwave")}
-                onConnect={() => setModal("flutterwave")}
-                available={true}
-            />
-
-            {["Monnify", "OPay"].map(name => (
+            {["OPay"].map(name => (
                 <GatewayCard
                     key={name}
-                    name={name}
-                    description="Coming soon"
+                    gatewayKey={"paystack"}
                     integration={undefined}
                     onConnect={() => {}}
                     available={false}

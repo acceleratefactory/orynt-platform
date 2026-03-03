@@ -15,7 +15,7 @@ celery_app = Celery(
     "orynt",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["app.tasks.paystack_tasks", "app.tasks.flutterwave_tasks"],
+    include=["app.tasks.paystack_tasks", "app.tasks.flutterwave_tasks", "app.tasks.monnify_tasks"],
 )
 
 celery_app.conf.update(

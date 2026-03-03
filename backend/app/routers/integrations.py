@@ -2,10 +2,13 @@
 ORYNT — Integrations Router
 POST /api/integrations/paystack/connect    — validate key, store encrypted, queue history pull
 POST /api/integrations/flutterwave/connect — same pattern for Flutterwave
+POST /api/integrations/monnify/connect     — Basic Auth, 3 credentials, queue history pull
 GET  /api/integrations                     — list integrations for current brand
 """
 
 import os
+import json
+import base64
 import logging
 from cryptography.fernet import Fernet
 import httpx
@@ -23,19 +26,19 @@ router = APIRouter(prefix="/api/integrations", tags=["Integrations"])
 
 PAYSTACK_BASE = "https://api.paystack.co"
 FLW_BASE = "https://api.flutterwave.com/v3"
+MONNIFY_BASE = "https://api.monnify.com"
 ENCRYPTION_KEY = os.getenv("PAYSTACK_ENCRYPTION_KEY", "")
 
 
-def _encrypt_key(secret_key: str) -> str:
+def _encrypt(value: str) -> str:
     f = Fernet(ENCRYPTION_KEY.encode())
-    return f.encrypt(secret_key.encode()).decode()
+    return f.encrypt(value.encode()).decode()
 
 
-def _upsert_integration(db: Session, brand_id: str, gateway: str, secret_key: str) -> Integration:
-    encrypted = _encrypt_key(secret_key)
+def _upsert_integration(db: Session, brand_id: str, gateway: str, encrypted_value: str) -> Integration:
     existing = db.query(Integration).filter_by(brand_id=brand_id, type=gateway).first()
     if existing:
-        existing.encrypted_key = encrypted
+        existing.encrypted_key = encrypted_value
         existing.status = "connected"
         integration = existing
     else:
@@ -43,7 +46,7 @@ def _upsert_integration(db: Session, brand_id: str, gateway: str, secret_key: st
             brand_id=brand_id,
             type=gateway,
             status="connected",
-            encrypted_key=encrypted,
+            encrypted_key=encrypted_value,
         )
         db.add(integration)
     db.commit()
@@ -51,13 +54,20 @@ def _upsert_integration(db: Session, brand_id: str, gateway: str, secret_key: st
     return integration
 
 
+# ── Request models ────────────────────────────────────────────────────────────
+
 class PaystackConnectRequest(BaseModel):
     secret_key: str
     brand_id: str
 
-
 class FlutterwaveConnectRequest(BaseModel):
     secret_key: str
+    brand_id: str
+
+class MonnifyConnectRequest(BaseModel):
+    api_key: str
+    secret_key: str
+    contract_code: str
     brand_id: str
 
 
@@ -84,12 +94,9 @@ def connect_paystack(
         raise HTTPException(status_code=502, detail=f"Could not reach Paystack: {exc}")
 
     if resp.status_code != 200:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Paystack secret key — validation failed.",
-        )
+        raise HTTPException(status_code=400, detail="Invalid Paystack secret key — validation failed.")
 
-    integration = _upsert_integration(db, body.brand_id, "paystack", body.secret_key)
+    integration = _upsert_integration(db, body.brand_id, "paystack", _encrypt(body.secret_key))
 
     try:
         from app.tasks.paystack_tasks import pull_paystack_history
@@ -97,11 +104,8 @@ def connect_paystack(
     except Exception as exc:
         logger.warning(f"[Paystack] Could not queue Celery task: {exc}")
 
-    return {
-        "status": "connected",
-        "integration_id": integration.id,
-        "message": "Paystack connected. Historical data sync started in the background.",
-    }
+    return {"status": "connected", "integration_id": integration.id,
+            "message": "Paystack connected. Historical data sync started in the background."}
 
 
 # ── Flutterwave ───────────────────────────────────────────────────────────────
@@ -116,7 +120,6 @@ def connect_flutterwave(
     if not brand:
         raise HTTPException(status_code=404, detail="Brand not found")
 
-    # Validate key against Flutterwave API
     try:
         resp = httpx.get(
             f"{FLW_BASE}/transactions",
@@ -127,20 +130,10 @@ def connect_flutterwave(
     except httpx.RequestError as exc:
         raise HTTPException(status_code=502, detail=f"Could not reach Flutterwave: {exc}")
 
-    if resp.status_code not in (200, 201):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Flutterwave secret key — validation failed.",
-        )
+    if resp.status_code not in (200, 201) or resp.json().get("status") != "success":
+        raise HTTPException(status_code=400, detail="Invalid Flutterwave secret key — validation failed.")
 
-    resp_json = resp.json()
-    if resp_json.get("status") != "success":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Flutterwave secret key — validation failed.",
-        )
-
-    integration = _upsert_integration(db, body.brand_id, "flutterwave", body.secret_key)
+    integration = _upsert_integration(db, body.brand_id, "flutterwave", _encrypt(body.secret_key))
 
     try:
         from app.tasks.flutterwave_tasks import pull_flutterwave_history
@@ -148,11 +141,56 @@ def connect_flutterwave(
     except Exception as exc:
         logger.warning(f"[Flutterwave] Could not queue Celery task: {exc}")
 
-    return {
-        "status": "connected",
-        "integration_id": integration.id,
-        "message": "Flutterwave connected. Historical data sync started in the background.",
-    }
+    return {"status": "connected", "integration_id": integration.id,
+            "message": "Flutterwave connected. Historical data sync started in the background."}
+
+
+# ── Monnify ───────────────────────────────────────────────────────────────────
+
+@router.post("/monnify/connect")
+def connect_monnify(
+    body: MonnifyConnectRequest,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    brand = db.get(Brand, body.brand_id)
+    if not brand:
+        raise HTTPException(status_code=404, detail="Brand not found")
+
+    # Validate via Monnify Basic Auth login
+    try:
+        credentials = base64.b64encode(f"{body.api_key}:{body.secret_key}".encode()).decode()
+        resp = httpx.post(
+            f"{MONNIFY_BASE}/api/v1/auth/login",
+            headers={"Authorization": f"Basic {credentials}"},
+            timeout=15,
+        )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach Monnify: {exc}")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=400, detail="Invalid Monnify credentials — validation failed.")
+
+    resp_json = resp.json()
+    if not resp_json.get("responseBody", {}).get("accessToken"):
+        raise HTTPException(status_code=400, detail="Invalid Monnify credentials — no token returned.")
+
+    # Encrypt all three credentials together as JSON
+    creds_json = json.dumps({
+        "api_key": body.api_key,
+        "secret_key": body.secret_key,
+        "contract_code": body.contract_code,
+    })
+    integration = _upsert_integration(db, body.brand_id, "monnify", _encrypt(creds_json))
+
+    try:
+        from app.tasks.monnify_tasks import pull_monnify_history
+        pull_monnify_history.delay(body.brand_id, integration.id)
+    except Exception as exc:
+        logger.warning(f"[Monnify] Could not queue Celery task: {exc}")
+
+    return {"status": "connected", "integration_id": integration.id,
+            "message": "Monnify connected. Historical data sync started in the background."}
 
 
 # ── List ──────────────────────────────────────────────────────────────────────
@@ -163,6 +201,5 @@ def list_integrations(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return all integrations for a brand."""
     integrations = db.query(Integration).filter_by(brand_id=brand_id).all()
     return [i.to_dict() for i in integrations]
