@@ -20,6 +20,10 @@
   --color-text-muted:     #5C5C73;
   --color-text-inverse:   #0A0A0F;
 
+  /* Logo — theme-aware */
+  --color-logo-mark:      #00C9A7;
+  --color-logo-text:      #F4F4F6;
+
   /* Accent — ORYNT Teal (NOT purple) */
   --color-accent:         #00C9A7;
   --color-accent-hover:   #00B396;
@@ -119,6 +123,10 @@
   --color-text-secondary: #4A4A5A;
   --color-text-muted:     #8B8B9E;
   --color-text-inverse:   #F4F4F6;
+
+  /* Logo — light mode: both mark and wordmark go dark */
+  --color-logo-mark:      #0A0A0F;
+  --color-logo-text:      #0A0A0F;
 
   /* Accent — unchanged */
   --color-accent:         #00C9A7;

@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { OryNTLogo } from "@/components/dashboard/orynt-logo"
 import { useAuthStore } from "@/store/auth"
 import { BrandSwitcher } from "@/components/dashboard/brand-switcher"
 import {
@@ -83,12 +84,7 @@ export function Sidebar() {
             {/* ── Logo area — 64px ───────────────────────────────── */}
             <div className="h-16 flex items-center px-5 flex-shrink-0" style={{ borderBottom: "1px solid var(--color-border)" }}>
                 <Link href="/dashboard" className="flex items-center">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src="/logo.svg"
-                        alt="ORYNT"
-                        style={{ height: "32px", width: "auto" }}
-                    />
+                    <OryNTLogo height={32} />
                 </Link>
             </div>
 
