@@ -5,14 +5,12 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { Mail, Lock, Eye, EyeOff, Zap } from "lucide-react"
+import { Mail, Lock, Zap } from "lucide-react"
 
 export default function SignupPage() {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
-    const [showPassword, setShowPassword] = useState(false)
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false)
     const [loading, setLoading] = useState(false)
     const router = useRouter()
     const { toast } = useToast()
@@ -120,28 +118,16 @@ export default function SignupPage() {
                                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#9CA3AF" }} />
                                 <input
                                     id="password"
-                                    type={showPassword ? "text" : "password"}
+                                    type="password"
                                     placeholder="Min 8 characters"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
-                                    className="w-full pl-10 pr-12 h-12 rounded-2xl border-none outline-none text-sm font-medium transition-shadow"
+                                    className="w-full pl-10 pr-4 h-12 rounded-2xl border-none outline-none text-sm font-medium transition-shadow"
                                     style={{ ...inputBase, boxShadow: "0 0 0 2px transparent" }}
                                     onFocus={focusRing}
                                     onBlur={blurRing}
                                 />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(v => !v)}
-                                    className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors"
-                                    style={{ color: "#9CA3AF" }}
-                                    onMouseEnter={e => e.currentTarget.style.color = "#00C9A7"}
-                                    onMouseLeave={e => e.currentTarget.style.color = "#9CA3AF"}
-                                    tabIndex={-1}
-                                    aria-label={showPassword ? "Hide password" : "Show password"}
-                                >
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
                             </div>
                         </div>
 
@@ -152,28 +138,16 @@ export default function SignupPage() {
                                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#9CA3AF" }} />
                                 <input
                                     id="confirm-password"
-                                    type={showConfirmPassword ? "text" : "password"}
+                                    type="password"
                                     placeholder="Repeat your password"
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
-                                    className="w-full pl-10 pr-12 h-12 rounded-2xl border-none outline-none text-sm font-medium transition-shadow"
+                                    className="w-full pl-10 pr-4 h-12 rounded-2xl border-none outline-none text-sm font-medium transition-shadow"
                                     style={{ ...inputBase, boxShadow: "0 0 0 2px transparent" }}
                                     onFocus={focusRing}
                                     onBlur={blurRing}
                                 />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword(v => !v)}
-                                    className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors"
-                                    style={{ color: "#9CA3AF" }}
-                                    onMouseEnter={e => e.currentTarget.style.color = "#00C9A7"}
-                                    onMouseLeave={e => e.currentTarget.style.color = "#9CA3AF"}
-                                    tabIndex={-1}
-                                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                                >
-                                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
                             </div>
                         </div>
 
