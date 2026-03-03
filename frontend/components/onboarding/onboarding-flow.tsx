@@ -285,7 +285,8 @@ export function OnboardingFlow({ brandId, brandName, onComplete }: OnboardingFlo
                                     <div key={i} className="bg-slate-50 rounded-2xl p-4 space-y-3">
                                         <div className="flex gap-2">
                                             <input
-                                                className="flex-1 h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                                className="flex-1 h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                                style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }}
                                                 placeholder="Product name *"
                                                 value={p.name}
                                                 onChange={e => updateProduct(i, "name", e.target.value)}
@@ -297,9 +298,9 @@ export function OnboardingFlow({ brandId, brandName, onComplete }: OnboardingFlo
                                             )}
                                         </div>
                                         <div className="grid grid-cols-3 gap-2">
-                                            <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="Selling price *" value={p.selling_price} onChange={e => updateProduct(i, "selling_price", e.target.value)} />
-                                            <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="Cost price" value={p.cost_price} onChange={e => updateProduct(i, "cost_price", e.target.value)} />
-                                            {!isDigital && <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="Stock qty" value={p.current_stock} onChange={e => updateProduct(i, "current_stock", e.target.value)} />}
+                                            <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }} placeholder="Selling price *" value={p.selling_price} onChange={e => updateProduct(i, "selling_price", e.target.value)} />
+                                            <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }} placeholder="Cost price" value={p.cost_price} onChange={e => updateProduct(i, "cost_price", e.target.value)} />
+                                            {!isDigital && <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }} placeholder="Stock qty" value={p.current_stock} onChange={e => updateProduct(i, "current_stock", e.target.value)} />}
                                         </div>
                                     </div>
                                 ))}

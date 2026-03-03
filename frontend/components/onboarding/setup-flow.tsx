@@ -165,7 +165,8 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
                                         id="category"
                                         value={category}
                                         onChange={(e) => setCategory(e.target.value)}
-                                        className="w-full h-12 rounded-2xl border-none bg-slate-50 px-4 text-slate-900 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none"
+                                        className="w-full h-12 rounded-2xl border-none px-4 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none"
+                                        style={{ backgroundColor: "#F8FAFC", color: "#1E293B" }}
                                         required
                                     >
                                         <option value="" disabled>Select a category…</option>
