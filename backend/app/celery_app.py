@@ -21,6 +21,7 @@ celery_app = Celery(
         "app.tasks.monnify_tasks",
         "app.tasks.opay_tasks",
         "app.tasks.mono_tasks",
+        "app.tasks.shopify_tasks",
     ],
 )
 

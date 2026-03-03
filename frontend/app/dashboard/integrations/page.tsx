@@ -1,9 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { CheckCircle2, AlertCircle, Plus, RefreshCw, Zap, Building2, ExternalLink } from "lucide-react"
+import { CheckCircle2, AlertCircle, Plus, RefreshCw, Zap, Building2, ExternalLink, ShoppingBag } from "lucide-react"
 import { useAuthStore } from "@/store/auth"
 import api from "@/lib/api"
+import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
 
 interface Integration {
     id: string
@@ -21,18 +23,14 @@ const PAYMENT_GATEWAYS = {
         label: "Paystack",
         description: "Payment gateway — Nigeria, Ghana, South Africa",
         endpoint: "/api/integrations/paystack/connect",
-        fields: [
-            { name: "secret_key", label: "Secret Key", placeholder: "sk_live_... or sk_test_...", type: "password" },
-        ],
+        fields: [{ name: "secret_key", label: "Secret Key", placeholder: "sk_live_... or sk_test_...", type: "password" }],
         hint: "Paystack Dashboard → Settings → API Keys & Webhooks",
     },
     flutterwave: {
         label: "Flutterwave",
         description: "Payment gateway — Pan-African, 30+ currencies",
         endpoint: "/api/integrations/flutterwave/connect",
-        fields: [
-            { name: "secret_key", label: "Secret Key", placeholder: "FLWSECK_TEST-... or FLWSECK-...", type: "password" },
-        ],
+        fields: [{ name: "secret_key", label: "Secret Key", placeholder: "FLWSECK_TEST-... or FLWSECK-...", type: "password" }],
         hint: "Flutterwave Dashboard → Settings → API Keys",
     },
     monnify: {
@@ -61,7 +59,7 @@ const PAYMENT_GATEWAYS = {
 
 type GatewayKey = keyof typeof PAYMENT_GATEWAYS
 
-// ── Connect Modal (payment gateways) ─────────────────────────────────────────
+// ── Connect Modal ─────────────────────────────────────────────────────────────
 
 function ConnectModal({ gateway, onClose, onSuccess, brandId }: {
     gateway: GatewayKey; onClose: () => void; onSuccess: () => void; brandId: string
@@ -73,8 +71,7 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: {
     const [success, setSuccess] = useState(false)
 
     const handleConnect = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true); setError("")
+        e.preventDefault(); setLoading(true); setError("")
         try {
             await api.post(meta.endpoint, { ...values, brand_id: brandId })
             setSuccess(true)
@@ -93,28 +90,23 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: {
                     </div>
                     <div>
                         <h2 className="text-base font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Connect {meta.label}</h2>
-                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Your credentials are encrypted and stored securely</p>
+                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Encrypted and stored securely</p>
                     </div>
                 </div>
                 {success ? (
                     <div className="flex items-center gap-3 p-4 rounded-xl" style={{ backgroundColor: "var(--color-accent-dim)", border: "1px solid var(--color-accent-border)" }}>
                         <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: "var(--color-accent)" }} />
-                        <div>
-                            <p className="text-sm font-semibold font-body" style={{ color: "var(--color-accent)" }}>Connected successfully!</p>
-                            <p className="text-xs font-body" style={{ color: "var(--color-text-secondary)" }}>Historical sync started in the background.</p>
-                        </div>
+                        <p className="text-sm font-semibold font-body" style={{ color: "var(--color-accent)" }}>Connected! Historical sync started.</p>
                     </div>
                 ) : (
                     <form onSubmit={handleConnect} className="space-y-4">
                         {meta.fields.map(field => (
                             <div key={field.name} className="space-y-1.5">
                                 <label className="block text-xs font-semibold font-body" style={{ color: "var(--color-text-secondary)" }}>{field.label}</label>
-                                <input type={field.type} placeholder={field.placeholder}
-                                    value={values[field.name] ?? ""}
-                                    onChange={e => setValues(v => ({ ...v, [field.name]: e.target.value }))}
-                                    required
-                                    className="w-full h-11 px-4 rounded-xl text-sm font-mono outline-none transition-shadow"
-                                    style={{ backgroundColor: "var(--color-surface-raised)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)", caretColor: "var(--color-accent)" }}
+                                <input type={field.type} placeholder={field.placeholder} value={values[field.name] ?? ""}
+                                    onChange={e => setValues(v => ({ ...v, [field.name]: e.target.value }))} required
+                                    className="w-full h-11 px-4 rounded-xl text-sm font-mono outline-none"
+                                    style={{ backgroundColor: "var(--color-surface-raised)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
                                     onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 2px var(--color-accent-border)"}
                                     onBlur={e => e.currentTarget.style.boxShadow = "none"} />
                             </div>
@@ -141,7 +133,117 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: {
     )
 }
 
-// ── Mono Connect Widget ───────────────────────────────────────────────────────
+// ── Shopify Card ──────────────────────────────────────────────────────────────
+
+function ShopifyCard({ integration, brandId, onSuccess }: {
+    integration: Integration | undefined; brandId: string; onSuccess: () => void
+}) {
+    const connected = integration?.status === "connected"
+    const [shopInput, setShopInput] = useState("")
+    const [showInput, setShowInput] = useState(false)
+    const [error, setError] = useState("")
+    const fmt = (iso: string | null) => iso
+        ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
+
+    const handleConnect = () => {
+        let shop = shopInput.trim()
+        if (!shop) { setError("Enter your Shopify store URL"); return }
+        if (!shop.includes(".myshopify.com")) shop = `${shop}.myshopify.com`
+        // Redirect to backend OAuth initiation
+        window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/integrations/shopify/auth?shop=${encodeURIComponent(shop)}&brand_id=${brandId}`
+    }
+
+    return (
+        <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: connected ? "rgba(0,201,167,0.1)" : "var(--color-surface-raised)" }}>
+                        <ShoppingBag className="w-6 h-6" style={{ color: connected ? "var(--color-accent)" : "var(--color-text-muted)" }} />
+                    </div>
+                    <div>
+                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Shopify</h3>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
+                            E-Commerce — full sync: products, customers, orders
+                        </p>
+                    </div>
+                </div>
+                {connected ? (
+                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
+                        style={{ backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)" }}>
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Connected
+                    </span>
+                ) : (
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold font-body"
+                        style={{ backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+                        Not connected
+                    </span>
+                )}
+            </div>
+
+            {connected && (
+                <div className="mt-5 grid grid-cols-3 gap-4">
+                    {[
+                        { label: "Last synced", value: fmt(integration!.last_sync_at) },
+                        { label: "Orders synced", value: integration!.transaction_count.toLocaleString() },
+                        { label: "Webhooks", value: "Active" },
+                    ].map(s => (
+                        <div key={s.label} className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                            <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{s.label}</p>
+                            <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>{s.value}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {showInput && !connected && (
+                <div className="mt-4 space-y-3">
+                    <div className="flex gap-2">
+                        <div className="flex-1 relative">
+                            <input type="text" placeholder="your-store.myshopify.com"
+                                value={shopInput} onChange={e => { setShopInput(e.target.value); setError("") }}
+                                onKeyDown={e => e.key === "Enter" && handleConnect()}
+                                className="w-full h-11 px-4 rounded-xl text-sm font-mono outline-none"
+                                style={{ backgroundColor: "var(--color-surface-raised)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
+                                onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 2px var(--color-accent-border)"}
+                                onBlur={e => e.currentTarget.style.boxShadow = "none"} />
+                        </div>
+                        <button onClick={handleConnect}
+                            className="px-5 h-11 rounded-xl text-sm font-bold font-body"
+                            style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
+                            Authorize →
+                        </button>
+                    </div>
+                    {error && <p className="text-xs font-body" style={{ color: "#EF4444" }}>{error}</p>}
+                    <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>
+                        You'll be redirected to Shopify to grant access. No secret keys needed.
+                    </p>
+                </div>
+            )}
+
+            <div className="mt-5 flex items-center gap-3">
+                {connected ? (
+                    <button onClick={() => setShowInput(true)} className="flex items-center gap-2 px-4 h-9 rounded-xl text-sm font-semibold font-body"
+                        style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>
+                        <RefreshCw className="w-3.5 h-3.5" /> Re-connect Store
+                    </button>
+                ) : !showInput ? (
+                    <button onClick={() => setShowInput(true)} className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
+                        style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
+                        <Plus className="w-4 h-4" /> Connect Shopify
+                    </button>
+                ) : (
+                    <button onClick={() => { setShowInput(false); setError("") }} className="text-sm font-semibold font-body"
+                        style={{ color: "var(--color-text-muted)" }}>
+                        Cancel
+                    </button>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// ── Mono Card ─────────────────────────────────────────────────────────────────
 
 function MonoBankCard({ integration, brandId, onSuccess }: {
     integration: Integration | undefined; brandId: string; onSuccess: () => void
@@ -155,91 +257,50 @@ function MonoBankCard({ integration, brandId, onSuccess }: {
 
     useEffect(() => {
         if (!connected || !brandId) return
-        api.get(`/api/orders/inbox?brand_id=${brandId}&page_size=1`).then(r => {
-            setPendingCount(r.data.total)
-        }).catch(() => {})
+        api.get(`/api/orders/inbox?brand_id=${brandId}&page_size=1`).then(r => setPendingCount(r.data.total)).catch(() => {})
     }, [connected, brandId])
 
     const handleConnect = async () => {
         setLoading(true); setError("")
         try {
-            // 1. Get Mono Connect URL/token
             const res = await api.post("/api/integrations/mono/initiate", { brand_id: brandId })
             const monoUrl = res.data.mono_url
-
-            if (!monoUrl) {
-                setError("Could not get Mono Connect URL. Ensure MONO_SECRET_KEY is set in backend .env.")
-                setLoading(false)
-                return
-            }
-
-            // 2. Open Mono Connect widget in a popup
-            const popup = window.open(monoUrl, "mono_connect",
-                "width=500,height=700,top=100,left=200,scrollbars=yes")
-
-            // 3. Listen for the mono success message from the popup
+            if (!monoUrl) { setError("Could not get Mono Connect URL. Ensure MONO_SECRET_KEY is set."); setLoading(false); return }
+            const popup = window.open(monoUrl, "mono_connect", "width=500,height=700,top=100,left=200,scrollbars=yes")
             const handler = async (event: MessageEvent) => {
-                if (event.data?.type === "mono.connect.widget.account_linked" ||
-                    event.data?.type === "mono.events.account_linked") {
+                if (event.data?.type === "mono.connect.widget.account_linked" || event.data?.type === "mono.events.account_linked") {
                     const code = event.data?.data?.code
                     popup?.close()
                     window.removeEventListener("message", handler)
-
                     if (code) {
-                        try {
-                            await api.post("/api/integrations/mono/exchange", { code, brand_id: brandId })
-                            onSuccess()
-                        } catch (err: any) {
-                            setError(err?.response?.data?.detail || "Failed to link bank account.")
-                        }
+                        try { await api.post("/api/integrations/mono/exchange", { code, brand_id: brandId }); onSuccess() }
+                        catch (err: any) { setError(err?.response?.data?.detail || "Failed to link bank account.") }
                     }
                     setLoading(false)
                 }
             }
             window.addEventListener("message", handler)
-
-            // Timeout if popup closed without success
-            const checkClosed = setInterval(() => {
-                if (popup?.closed) {
-                    clearInterval(checkClosed)
-                    window.removeEventListener("message", handler)
-                    setLoading(false)
-                }
-            }, 1000)
-        } catch (err: any) {
-            setError(err?.response?.data?.detail || "Failed to initiate Mono Connect.")
-            setLoading(false)
-        }
+            const checkClosed = setInterval(() => { if (popup?.closed) { clearInterval(checkClosed); window.removeEventListener("message", handler); setLoading(false) } }, 1000)
+        } catch (err: any) { setError(err?.response?.data?.detail || "Failed to initiate Mono Connect."); setLoading(false) }
     }
 
     return (
         <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
             <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-                        style={{ backgroundColor: connected ? "rgba(0,201,167,0.1)" : "var(--color-surface-raised)" }}>
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: connected ? "rgba(0,201,167,0.1)" : "var(--color-surface-raised)" }}>
                         <Building2 className="w-6 h-6" style={{ color: connected ? "var(--color-accent)" : "var(--color-text-muted)" }} />
                     </div>
                     <div>
                         <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Bank Account (Mono)</h3>
-                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
-                            Import bank transfers — converts credits to Order Inbox items
-                        </p>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>Import bank transfers → Order Inbox for review</p>
                     </div>
                 </div>
-                {connected ? (
-                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
-                        style={{ backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)" }}>
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Connected
-                    </span>
-                ) : (
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold font-body"
-                        style={{ backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
-                        Not connected
-                    </span>
-                )}
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold font-body flex items-center gap-1.5`}
+                    style={connected ? { backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)" } : { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+                    {connected && <CheckCircle2 className="w-3.5 h-3.5" />} {connected ? "Connected" : "Not connected"}
+                </span>
             </div>
-
             {connected && (
                 <div className="mt-5 grid grid-cols-2 gap-4">
                     <div className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
@@ -249,33 +310,17 @@ function MonoBankCard({ integration, brandId, onSuccess }: {
                     <div className="rounded-xl p-4 cursor-pointer" style={{ backgroundColor: pendingCount ? "rgba(245,158,11,0.1)" : "var(--color-surface-raised)", border: pendingCount ? "1px solid rgba(245,158,11,0.3)" : "none" }}
                         onClick={() => pendingCount && (window.location.href = "/dashboard/orders/inbox")}>
                         <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Unmatched transfers</p>
-                        <p className="mt-1 text-sm font-semibold font-body" style={{ color: pendingCount ? "#F59E0B" : "var(--color-text-primary)" }}>
-                            {pendingCount ?? "—"} {pendingCount ? "→ Review" : ""}
-                        </p>
+                        <p className="mt-1 text-sm font-semibold font-body" style={{ color: pendingCount ? "#F59E0B" : "var(--color-text-primary)" }}>{pendingCount ?? "—"}{pendingCount ? " → Review" : ""}</p>
                     </div>
                 </div>
             )}
-
-            {error && (
-                <div className="mt-4 flex items-start gap-2 p-3 rounded-xl text-xs font-body"
-                    style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444" }}>
-                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
-                </div>
-            )}
-
+            {error && <div className="mt-4 text-xs font-body p-3 rounded-xl" style={{ backgroundColor: "rgba(239,68,68,0.08)", color: "#EF4444" }}>{error}</div>}
             <div className="mt-5 flex items-center gap-3">
-                <button onClick={handleConnect} disabled={loading}
-                    className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body disabled:opacity-60"
+                <button onClick={handleConnect} disabled={loading} className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body disabled:opacity-60"
                     style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
-                    {loading ? "Opening..." : connected ? <><RefreshCw className="w-3.5 h-3.5" /> Re-connect Bank</> : <><Plus className="w-4 h-4" /> Connect Bank Account</>}
+                    {loading ? "Opening..." : connected ? <><RefreshCw className="w-3.5 h-3.5" /> Re-connect</> : <><Plus className="w-4 h-4" /> Connect Bank Account</>}
                 </button>
-                {connected && (
-                    <a href="/dashboard/orders/inbox"
-                        className="flex items-center gap-1.5 text-sm font-semibold font-body"
-                        style={{ color: "var(--color-accent)" }}>
-                        <ExternalLink className="w-4 h-4" /> Order Inbox
-                    </a>
-                )}
+                {connected && <a href="/dashboard/orders/inbox" className="text-sm font-semibold font-body flex items-center gap-1.5" style={{ color: "var(--color-accent)" }}><ExternalLink className="w-4 h-4" /> Order Inbox</a>}
             </div>
         </div>
     )
@@ -283,17 +328,14 @@ function MonoBankCard({ integration, brandId, onSuccess }: {
 
 // ── Gateway Card ──────────────────────────────────────────────────────────────
 
-function GatewayCard({ gatewayKey, integration, onConnect, available }: {
-    gatewayKey: GatewayKey; integration: Integration | undefined; onConnect: () => void; available: boolean
+function GatewayCard({ gatewayKey, integration, onConnect }: {
+    gatewayKey: GatewayKey; integration: Integration | undefined; onConnect: () => void
 }) {
     const meta = PAYMENT_GATEWAYS[gatewayKey]
     const connected = integration?.status === "connected"
-    const fmt = (iso: string | null) => iso
-        ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
-
+    const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
     return (
-        <div className={`rounded-2xl p-6 ${!available ? "opacity-50" : ""}`}
-            style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+        <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
             <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold"
@@ -305,24 +347,14 @@ function GatewayCard({ gatewayKey, integration, onConnect, available }: {
                         <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>{meta.description}</p>
                     </div>
                 </div>
-                {connected ? (
-                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
-                        style={{ backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)" }}>
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Connected
-                    </span>
-                ) : (
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold font-body"
-                        style={{ backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
-                        Not connected
-                    </span>
-                )}
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
+                    style={connected ? { backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)" } : { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+                    {connected && <CheckCircle2 className="w-3.5 h-3.5" />} {connected ? "Connected" : "Not connected"}
+                </span>
             </div>
             {connected && (
                 <div className="mt-5 grid grid-cols-2 gap-4">
-                    {[
-                        { label: "Last synced", value: fmt(integration!.last_sync_at) },
-                        { label: "Orders imported", value: integration!.transaction_count.toLocaleString() },
-                    ].map(s => (
+                    {[{ label: "Last synced", value: fmt(integration!.last_sync_at) }, { label: "Orders imported", value: integration!.transaction_count.toLocaleString() }].map(s => (
                         <div key={s.label} className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
                             <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{s.label}</p>
                             <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>{s.value}</p>
@@ -330,40 +362,46 @@ function GatewayCard({ gatewayKey, integration, onConnect, available }: {
                     ))}
                 </div>
             )}
-            {available && (
-                <div className="mt-5">
-                    {connected ? (
-                        <button onClick={onConnect} className="flex items-center gap-2 px-4 h-9 rounded-xl text-sm font-semibold font-body"
-                            style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>
-                            <RefreshCw className="w-3.5 h-3.5" /> Re-connect / Update Key
-                        </button>
-                    ) : (
-                        <button onClick={onConnect} className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
-                            style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
-                            <Plus className="w-4 h-4" /> Connect {meta.label}
-                        </button>
-                    )}
-                </div>
-            )}
+            <div className="mt-5">
+                {connected ? (
+                    <button onClick={onConnect} className="flex items-center gap-2 px-4 h-9 rounded-xl text-sm font-semibold font-body"
+                        style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>
+                        <RefreshCw className="w-3.5 h-3.5" /> Re-connect / Update Key
+                    </button>
+                ) : (
+                    <button onClick={onConnect} className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
+                        style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
+                        <Plus className="w-4 h-4" /> Connect {meta.label}
+                    </button>
+                )}
+            </div>
         </div>
     )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// ── Page (inner) ──────────────────────────────────────────────────────────────
 
-export default function IntegrationsPage() {
+function IntegrationsInner() {
     const { activeBrandId } = useAuthStore()
     const [integrations, setIntegrations] = useState<Integration[]>([])
     const [modal, setModal] = useState<GatewayKey | null>(null)
+    const [shopifySuccess, setShopifySuccess] = useState("")
+    const searchParams = useSearchParams()
 
     const load = async () => {
         if (!activeBrandId) return
-        try {
-            const res = await api.get(`/api/integrations?brand_id=${activeBrandId}`)
-            setIntegrations(res.data)
-        } catch { setIntegrations([]) }
+        try { const res = await api.get(`/api/integrations?brand_id=${activeBrandId}`); setIntegrations(res.data) }
+        catch { setIntegrations([]) }
     }
+
     useEffect(() => { load() }, [activeBrandId])
+    useEffect(() => {
+        if (searchParams?.get("shopify") === "connected") {
+            setShopifySuccess(`Shopify store "${searchParams.get("shop")}" connected! Sync running in background.`)
+            load()
+        }
+    }, [searchParams])
+
     const find = (type: string) => integrations.find(i => i.type === type)
 
     return (
@@ -371,35 +409,44 @@ export default function IntegrationsPage() {
             <div>
                 <h1 className="text-2xl font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Integrations</h1>
                 <p className="mt-1 text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
-                    Connect your payment gateways and bank accounts to automatically import orders.
+                    Connect your payment gateways, stores, and bank accounts to import orders automatically.
                 </p>
             </div>
 
+            {shopifySuccess && (
+                <div className="flex items-center gap-3 p-4 rounded-xl" style={{ backgroundColor: "var(--color-accent-dim)", border: "1px solid var(--color-accent-border)" }}>
+                    <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: "var(--color-accent)" }} />
+                    <p className="text-sm font-semibold font-body" style={{ color: "var(--color-accent)" }}>{shopifySuccess}</p>
+                    <button onClick={() => setShopifySuccess("")} className="ml-auto text-xs font-body" style={{ color: "var(--color-text-muted)" }}>✕</button>
+                </div>
+            )}
+
             <div>
-                <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>
-                    Payment Gateways
-                </h2>
+                <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>E-Commerce</h2>
+                {activeBrandId && <ShopifyCard integration={find("shopify")} brandId={activeBrandId} onSuccess={load} />}
+            </div>
+
+            <div>
+                <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>Payment Gateways</h2>
                 <div className="space-y-4">
                     {(Object.keys(PAYMENT_GATEWAYS) as GatewayKey[]).map(key => (
-                        <GatewayCard key={key} gatewayKey={key} integration={find(key)}
-                            onConnect={() => setModal(key)} available={true} />
+                        <GatewayCard key={key} gatewayKey={key} integration={find(key)} onConnect={() => setModal(key)} />
                     ))}
                 </div>
             </div>
 
             <div>
-                <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>
-                    Open Banking
-                </h2>
-                {activeBrandId && (
-                    <MonoBankCard integration={find("mono")} brandId={activeBrandId} onSuccess={load} />
-                )}
+                <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>Open Banking</h2>
+                {activeBrandId && <MonoBankCard integration={find("mono")} brandId={activeBrandId} onSuccess={load} />}
             </div>
 
             {modal && activeBrandId && (
-                <ConnectModal gateway={modal} brandId={activeBrandId}
-                    onClose={() => setModal(null)} onSuccess={load} />
+                <ConnectModal gateway={modal} brandId={activeBrandId} onClose={() => setModal(null)} onSuccess={load} />
             )}
         </div>
     )
+}
+
+export default function IntegrationsPage() {
+    return <Suspense fallback={<div className="p-8" style={{ color: "var(--color-text-muted)" }}>Loading...</div>}><IntegrationsInner /></Suspense>
 }

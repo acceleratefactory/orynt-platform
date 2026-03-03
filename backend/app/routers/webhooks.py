@@ -4,7 +4,8 @@ POST /api/webhooks/paystack    — HMAC-SHA512 validation, handles charge.succes
 POST /api/webhooks/flutterwave — verif-hash validation, handles charge.completed.
 POST /api/webhooks/monnify     — HMAC-SHA512 validation, handles SUCCESSFUL_TRANSACTION.
 POST /api/webhooks/opay        — HMAC-SHA512 of sorted JSON body, handles payment events.
-POST /api/webhooks/mono        — HMAC-SHA512 validation, handles account_updated (pulls new credits).
+POST /api/webhooks/mono        — HMAC-SHA512 validation, handles account_updated.
+POST /api/webhooks/shopify     — HMAC-SHA256 (Shopify-specific), handles orders/products/inventory.
 Always returns 200.
 """
 
@@ -529,3 +530,198 @@ async def mono_webhook(request: Request, db: Session = Depends(get_db)):
                 break
 
     return {"status": "ok"}
+
+
+# ── Shopify Webhook ──────────────────────────────────────────────────────────────
+
+SHOPIFY_API_SECRET = os.getenv("SHOPIFY_API_SECRET", "")
+
+
+def _verify_shopify_webhook_sig(raw_body: bytes, provided_sig: str) -> bool:
+    """Shopify uses HMAC-SHA256 (base64-encoded) with SHOPIFY_API_SECRET."""
+    if not SHOPIFY_API_SECRET:
+        return True  # Skip in dev if not configured
+    import base64
+    computed = hmac.new(SHOPIFY_API_SECRET.encode(), raw_body, hashlib.sha256).digest()
+    computed_b64 = base64.b64encode(computed).decode()
+    return hmac.compare_digest(computed_b64, provided_sig)
+
+
+def _shopify_find_integration(shop_domain: str, db: Session):
+    """Find a Shopify integration by matching the stored shop domain."""
+    from app.models.integration import Integration
+    from cryptography.fernet import Fernet
+    for intg in db.query(Integration).filter_by(type="shopify", status="connected").all():
+        raw = _decrypt_integration_key(intg)
+        if raw:
+            try:
+                creds = _json.loads(raw)
+                if creds.get("shop") == shop_domain:
+                    return intg, creds.get("access_token", "")
+            except Exception:
+                pass
+    return None, None
+
+
+@router.post("/shopify")
+async def shopify_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Receive Shopify webhook events.
+    Validates X-Shopify-Hmac-Sha256 header (HMAC-SHA256 of raw body).
+    Handles: orders/create, orders/updated, products/update, inventory_levels/update.
+    Always returns 200.
+    """
+    raw_body = await request.body()
+    provided_sig = request.headers.get("x-shopify-hmac-sha256", "")
+    topic = request.headers.get("x-shopify-topic", "")
+    shop_domain = request.headers.get("x-shopify-shop-domain", "")
+
+    if provided_sig and not _verify_shopify_webhook_sig(raw_body, provided_sig):
+        logger.warning(f"[Shopify Webhook] Invalid signature from {shop_domain}")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    try:
+        payload = _json.loads(raw_body) if raw_body else {}
+    except Exception:
+        return {"status": "ok"}
+
+    intg, access_token = _shopify_find_integration(shop_domain, db)
+    if not intg:
+        logger.warning(f"[Shopify Webhook] No integration found for shop {shop_domain}")
+        return {"status": "ok"}
+
+    brand_id = intg.brand_id
+    logger.info(f"[Shopify Webhook] topic={topic} brand={brand_id}")
+
+    if topic in ("orders/create", "orders/updated"):
+        _shopify_handle_order(payload, brand_id, shop_domain, db)
+    elif topic == "products/update":
+        _shopify_handle_product_update(payload, brand_id, access_token, shop_domain, db)
+    elif topic == "inventory_levels/update":
+        _shopify_handle_inventory_update(payload, brand_id, db)
+
+    return {"status": "ok"}
+
+
+def _shopify_handle_order(order: dict, brand_id: str, shop: str, db: Session):
+    from app.models.order_item import OrderItem
+    from app.models.product import Product
+
+    external_id = str(order.get("id", ""))
+    if not external_id:
+        return
+
+    # Map financial status
+    fs = str(order.get("financial_status", "")).lower()
+    status_map = {"paid": "completed", "partially_paid": "completed",
+                  "pending": "pending", "refunded": "refunded",
+                  "partially_refunded": "refunded", "voided": "failed"}
+    status = status_map.get(fs, "pending")
+
+    existing = db.query(Order).filter_by(
+        brand_id=brand_id, external_id=external_id, source="shopify"
+    ).first()
+
+    if existing:
+        # Update status only if changed
+        if existing.status != status:
+            existing.status = status
+            db.commit()
+        return
+
+    # New order — find/create customer
+    cust_data = order.get("customer") or {}
+    email = str(cust_data.get("email") or order.get("email") or "").lower().strip()
+    customer = None
+    if email:
+        customer = _upsert_customer(
+            brand_id, email,
+            f"{cust_data.get('first_name', '')} {cust_data.get('last_name', '')}".strip() or None,
+            cust_data.get("phone"), db
+        )
+
+    total_price = round(float(order.get("total_price", "0") or 0), 2)
+    currency = order.get("currency", "NGN")
+    gateway = str(order.get("payment_gateway", "shopify") or "shopify").lower()
+
+    try:
+        ordered_at = datetime.fromisoformat(
+            str(order.get("created_at", "")).replace("Z", "+00:00")
+        )
+    except Exception:
+        ordered_at = datetime.now(timezone.utc)
+
+    new_order = Order(
+        brand_id=brand_id, customer_id=customer.id if customer else None,
+        source="shopify", channel="website", status=status,
+        total_amount=total_price,
+        original_amount=total_price if currency != "NGN" else None,
+        original_currency=currency if currency != "NGN" else None,
+        payment_method="card" if "card" in gateway else "bank_transfer",
+        payment_gateway=gateway,
+        external_id=external_id, ordered_at=ordered_at,
+        notes=f"Shopify order #{order.get('name', '')}",
+    )
+    db.add(new_order)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        return
+
+    for item in (order.get("line_items") or []):
+        ext_variant_id = str(item.get("variant_id") or "")
+        ext_product_id = str(item.get("product_id") or "")
+        unit_price = round(float(item.get("price", "0") or 0), 2)
+        quantity = int(item.get("quantity") or 1)
+        product = None
+        if ext_variant_id:
+            product = db.query(Product).filter_by(
+                brand_id=brand_id, external_id=ext_variant_id, source="shopify"
+            ).first()
+        oi = OrderItem(
+            order_id=new_order.id, brand_id=brand_id,
+            product_id=product.id if product else None,
+            external_product_id=ext_product_id or None,
+            external_variant_id=ext_variant_id or None,
+            name=str(item.get("title") or item.get("name") or "Unknown"),
+            sku=str(item.get("sku") or "") or None,
+            quantity=quantity, unit_price=unit_price,
+            total_price=round(unit_price * quantity, 2),
+        )
+        db.add(oi)
+    db.commit()
+    logger.info(f"[Shopify Webhook] Created order {external_id}")
+
+
+def _shopify_handle_product_update(product: dict, brand_id: str, access_token: str, shop: str, db: Session):
+    from app.models.product import Product
+    for variant in (product.get("variants") or []):
+        external_id = str(variant.get("id", ""))
+        if not external_id:
+            continue
+        selling_price = round(float(variant.get("price", "0") or 0), 2)
+        existing = db.query(Product).filter_by(
+            brand_id=brand_id, external_id=external_id, source="shopify"
+        ).first()
+        if existing:
+            existing.selling_price = selling_price
+            variant_title = variant.get("title", "")
+            full_name = f"{product.get('title', '')} — {variant_title}" if variant_title and variant_title != "Default Title" else product.get("title", existing.name)
+            existing.name = full_name
+            db.commit()
+            logger.info(f"[Shopify Webhook] Updated product variant {external_id}")
+
+
+def _shopify_handle_inventory_update(payload: dict, brand_id: str, db: Session):
+    from app.models.product import Product
+    inventory_item_id = str(payload.get("inventory_item_id", ""))
+    available = payload.get("available", 0)
+    if not inventory_item_id:
+        return
+    # Find product by inventory_item_id (stored in notes or look up by external_id pattern)
+    # Shopify inventory_items link to variants — we store variant_id as external_id
+    # Use a direct update via inventory item if we can match
+    logger.info(f"[Shopify Webhook] Inventory update: item={inventory_item_id} available={available}")
+    # Best-effort: update all products with matching brand if we stored inv_item_id
+    # (Full matching requires storing inv_item_id in product record - future enhancement)
