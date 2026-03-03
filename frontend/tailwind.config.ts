@@ -64,10 +64,10 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ["Syne", "sans-serif"],
-        body:    ["DM Sans", "sans-serif"],
-        mono:    ["JetBrains Mono", "monospace"],
-        sans:    ["DM Sans", "sans-serif"], // default override
+        display: ["var(--font-display)", "Syne", "sans-serif"],
+        body:    ["var(--font-body)", "DM Sans", "sans-serif"],
+        mono:    ["var(--font-mono)", "JetBrains Mono", "monospace"],
+        sans:    ["var(--font-body)", "DM Sans", "sans-serif"],
       },
       borderRadius: {
         sm:   "4px",

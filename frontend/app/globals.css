@@ -1,5 +1,4 @@
-/* ─── Google Fonts ──────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Fonts loaded via next/font/google in layout.tsx (--font-display, --font-body, --font-mono) */
 
 /* ─── Tailwind ───────────────────────────────────────────────────────────── */
 @tailwind base;
@@ -124,7 +123,7 @@
 html {
   background-color: #0A0A0F;
   color: #F4F4F6;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body, 'DM Sans', sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -132,8 +131,13 @@ html {
 body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body, 'DM Sans', sans-serif);
   min-height: 100vh;
+}
+
+/* Headings — Syne via next/font CSS variable */
+h1, h2, h3, h4 {
+  font-family: var(--font-display, 'Syne', sans-serif);
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */

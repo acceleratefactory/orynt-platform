@@ -85,9 +85,12 @@ export function Sidebar() {
                 <Link href="/dashboard" className="flex items-center gap-2.5">
                     {/* Compass mark — circle + arrow */}
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="10" stroke="var(--color-accent)" strokeWidth="1.5" />
-                        <line x1="8.5" y1="15.5" x2="15.5" y2="8.5" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round" />
-                        <polygon points="15.5,8.5 11.5,8.5 15.5,12.5" fill="var(--color-accent)" />
+                        <circle cx="12" cy="12" r="9.5" stroke="var(--color-accent)" strokeWidth="1.5" />
+                        {/* Shaft */}
+                        <line x1="9" y1="15" x2="15" y2="9" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="butt" />
+                        {/* Arrowhead — two thin strokes, no fill */}
+                        <line x1="15" y1="9" x2="11" y2="9" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="butt" />
+                        <line x1="15" y1="9" x2="15" y2="13" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="butt" />
                     </svg>
                     {/* Wordmark — Syne font, all caps */}
                     <span
