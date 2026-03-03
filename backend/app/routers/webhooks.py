@@ -3,6 +3,7 @@ ORYNT — Webhooks Router
 POST /api/webhooks/paystack    — HMAC-SHA512 validation, handles charge.success etc.
 POST /api/webhooks/flutterwave — verif-hash validation, handles charge.completed.
 POST /api/webhooks/monnify     — HMAC-SHA512 validation, handles SUCCESSFUL_TRANSACTION.
+POST /api/webhooks/opay        — HMAC-SHA512 of sorted JSON body, handles payment events.
 Always returns 200.
 """
 
@@ -260,7 +261,6 @@ def _flw_handle_charge(txn: dict, brand_id: str, db: Session):
 # ── Monnify Webhook ───────────────────────────────────────────────────────────
 
 def _verify_monnify_sig(raw_body: bytes, provided_hash: str, secret_key: str) -> bool:
-    """Monnify uses HMAC-SHA512 with the secret_key."""
     computed = hmac.new(secret_key.encode(), raw_body, hashlib.sha512).hexdigest()
     return hmac.compare_digest(computed, provided_hash)
 
@@ -283,14 +283,8 @@ def _monnify_infer_payment_method(txn: dict) -> str:
 
 @router.post("/monnify")
 async def monnify_webhook(request: Request, db: Session = Depends(get_db)):
-    """
-    Receive Monnify webhook events.
-    Validates via HMAC-SHA512 of the raw body using the stored secret_key.
-    Handles SUCCESSFUL_TRANSACTION event. Always returns 200.
-    """
     raw_body = await request.body()
     provided_hash = request.headers.get("monnify-signature", "")
-
     try:
         payload = _json.loads(raw_body) if raw_body else {}
     except Exception:
@@ -298,39 +292,34 @@ async def monnify_webhook(request: Request, db: Session = Depends(get_db)):
 
     event_type = payload.get("eventType", "")
     data = payload.get("eventData", {})
-
-    # Determine brand from event meta or fallback to first connected integration
     meta = data.get("metaData") or {}
     brand_id = meta.get("brand_id")
 
-    if not brand_id:
-        integrations = _all_integrations("monnify", db)
-        if not integrations:
-            return {"status": "ok"}
-        brand_id = integrations[0].brand_id
-        intg = integrations[0]
-    else:
+    integrations = _all_integrations("monnify", db)
+    intg = None
+    if brand_id:
         intg = _find_integration(brand_id, "monnify", db)
+    elif integrations:
+        intg = integrations[0]
+        brand_id = intg.brand_id
 
-    # Validate signature using stored secret_key
     if intg and provided_hash:
         decrypted = _decrypt_integration_key(intg)
         if decrypted:
             try:
-                import json as _j
-                creds = _j.loads(decrypted)
+                creds = _json.loads(decrypted)
                 secret_key = creds.get("secret_key", "")
             except Exception:
-                secret_key = decrypted  # fallback for plain keys
+                secret_key = decrypted
             if secret_key and not _verify_monnify_sig(raw_body, provided_hash, secret_key):
-                logger.warning(f"[Monnify Webhook] Invalid signature for brand={brand_id}")
                 raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
-    logger.info(f"[Monnify Webhook] eventType={event_type} brand={brand_id}")
+    if not brand_id:
+        return {"status": "ok"}
 
+    logger.info(f"[Monnify Webhook] eventType={event_type} brand={brand_id}")
     if event_type == "SUCCESSFUL_TRANSACTION":
         _monnify_handle_success(data, brand_id, db)
-
     return {"status": "ok"}
 
 
@@ -340,15 +329,12 @@ def _monnify_handle_success(txn: dict, brand_id: str, db: Session):
         return
     if db.query(Order).filter_by(brand_id=brand_id, external_id=external_id, source="monnify").first():
         return
-
     email = str(txn.get("customerEmail", "")).lower().strip()
     customer = None
     if email:
         customer = _upsert_customer(brand_id, email, txn.get("customerName"), txn.get("customerPhone"), db)
-
     amount_ngn = round(float(txn.get("amountPaid") or txn.get("totalPayable") or 0), 2)
     currency = txn.get("currencyCode", "NGN")
-
     created_at_raw = txn.get("createdOn") or txn.get("completedOn")
     try:
         if isinstance(created_at_raw, (int, float)):
@@ -357,7 +343,6 @@ def _monnify_handle_success(txn: dict, brand_id: str, db: Session):
             ordered_at = datetime.fromisoformat(str(created_at_raw).replace("Z", "+00:00"))
     except Exception:
         ordered_at = datetime.now(timezone.utc)
-
     _save_order(Order(
         brand_id=brand_id, customer_id=customer.id if customer else None,
         source="monnify", channel=_monnify_infer_channel(txn), status="completed",
@@ -366,4 +351,120 @@ def _monnify_handle_success(txn: dict, brand_id: str, db: Session):
         original_currency=currency if currency != "NGN" else None,
         payment_method=_monnify_infer_payment_method(txn),
         payment_gateway="monnify", external_id=external_id, ordered_at=ordered_at,
+    ), db)
+
+
+# ── OPay Webhook ──────────────────────────────────────────────────────────────
+
+def _verify_opay_sig(raw_body: bytes, provided_sig: str, private_key: str) -> bool:
+    """OPay: HMAC-SHA512 of alphabetically-sorted JSON body with private_key."""
+    try:
+        payload = _json.loads(raw_body)
+        sorted_body = _json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        computed = hmac.new(private_key.encode(), sorted_body.encode(), hashlib.sha512).hexdigest()
+        return hmac.compare_digest(computed, provided_sig)
+    except Exception:
+        return False
+
+
+def _opay_infer_channel(txn: dict) -> str:
+    pay_ch = str(txn.get("payChannel", "") or txn.get("channel", "") or "").lower()
+    if any(w in pay_ch for w in ["pos", "instore", "in_store", "offline", "physical"]):
+        return "physical"
+    if any(w in pay_ch for w in ["mobile", "whatsapp", "social"]):
+        return "social"
+    return "website"
+
+
+def _opay_infer_payment_method(txn: dict) -> str:
+    pay_ch = str(txn.get("payChannel", "") or txn.get("payMethod", "") or "").lower()
+    if any(w in pay_ch for w in ["card", "visa", "mastercard"]):
+        return "card"
+    return "bank_transfer"
+
+
+@router.post("/opay")
+async def opay_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Receive OPay webhook events.
+    Validates via HMAC-SHA512 of sorted JSON body with stored private_key.
+    Always returns 200.
+    """
+    raw_body = await request.body()
+    provided_sig = request.headers.get("sign", "") or request.headers.get("x-sign", "")
+
+    try:
+        payload = _json.loads(raw_body) if raw_body else {}
+    except Exception:
+        return {"status": "ok"}
+
+    merchant_id = (payload.get("data") or {}).get("merchantId") or payload.get("merchantId", "")
+    brand_id = None
+
+    for intg in _all_integrations("opay", db):
+        raw = _decrypt_integration_key(intg)
+        if not raw:
+            continue
+        try:
+            creds = _json.loads(raw)
+        except Exception:
+            continue
+        if merchant_id and creds.get("merchant_id") != merchant_id:
+            continue
+        if provided_sig and not _verify_opay_sig(raw_body, provided_sig, creds.get("private_key", "")):
+            continue
+        brand_id = intg.brand_id
+        break
+
+    if not brand_id:
+        all_opay = _all_integrations("opay", db)
+        brand_id = all_opay[0].brand_id if all_opay else None
+
+    if not brand_id:
+        logger.warning("[OPay Webhook] No connected OPay integration found")
+        return {"status": "ok"}
+
+    event_type = str(payload.get("event", "") or payload.get("notifyType", "")).upper()
+    event_data = payload.get("data") or payload
+    logger.info(f"[OPay Webhook] event={event_type} brand={brand_id}")
+
+    status_val = str(event_data.get("status", "") or event_data.get("orderStatus", "")).upper()
+    if status_val in ("SUCCESSFUL", "SUCCESS", "COMPLETED", "PAID") or \
+       any(e in event_type for e in ("PAYMENT_COMPLETED", "CASHIER_PAYMENT", "PAYMENT_SUCCESS")):
+        _opay_handle_payment(event_data, brand_id, db)
+    return {"status": "ok"}
+
+
+def _opay_handle_payment(txn: dict, brand_id: str, db: Session):
+    external_id = str(txn.get("orderNo") or txn.get("transactionNo") or txn.get("reference") or "")
+    if not external_id:
+        return
+    if db.query(Order).filter_by(brand_id=brand_id, external_id=external_id, source="opay").first():
+        return
+    user_info = txn.get("userInfo") or {}
+    email = str(user_info.get("userEmail") or txn.get("email") or "").lower().strip()
+    customer = None
+    if email:
+        customer = _upsert_customer(brand_id, email,
+                                    user_info.get("fullName") or user_info.get("userName"),
+                                    user_info.get("phoneNumber"), db)
+    raw_amount = txn.get("amount") or txn.get("orderAmount") or 0
+    amount_ngn = round(float(raw_amount) / 100, 2)
+    currency = txn.get("currency", "NGN")
+    created_at_raw = txn.get("createTime") or txn.get("orderTime") or txn.get("createdAt")
+    try:
+        if isinstance(created_at_raw, (int, float)):
+            ordered_at = datetime.fromtimestamp(created_at_raw / 1000, tz=timezone.utc)
+        else:
+            ordered_at = datetime.fromisoformat(str(created_at_raw).replace("Z", "+00:00"))
+    except Exception:
+        ordered_at = datetime.now(timezone.utc)
+    _save_order(Order(
+        brand_id=brand_id, customer_id=customer.id if customer else None,
+        source="opay", channel=_opay_infer_channel(txn), status="completed",
+        total_amount=amount_ngn,
+        original_amount=amount_ngn if currency != "NGN" else None,
+        original_currency=currency if currency != "NGN" else None,
+        payment_method=_opay_infer_payment_method(txn),
+        payment_gateway="opay", external_id=external_id, ordered_at=ordered_at,
     ), db)

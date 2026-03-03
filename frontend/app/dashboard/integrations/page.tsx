@@ -46,20 +46,26 @@ const GATEWAYS = {
         ],
         hint: "Monnify Dashboard → Settings → API Keys",
     },
+    opay: {
+        label: "OPay",
+        description: "Payment gateway — Nigeria, POS & online",
+        endpoint: "/api/integrations/opay/connect",
+        fields: [
+            { name: "merchant_id", label: "Merchant ID", placeholder: "Your OPay Merchant ID", type: "text" },
+            { name: "public_key", label: "Public Key", placeholder: "Your OPay public key", type: "password" },
+            { name: "private_key", label: "Private Key", placeholder: "Your OPay private key", type: "password" },
+        ],
+        hint: "OPay Merchant Dashboard → Account Settings → API Keys",
+    },
 } as const
 
 type GatewayKey = keyof typeof GATEWAYS
 
 // ── Connect Modal ─────────────────────────────────────────────────────────────
 
-interface ConnectModalProps {
-    gateway: GatewayKey
-    onClose: () => void
-    onSuccess: () => void
-    brandId: string
-}
-
-function ConnectModal({ gateway, onClose, onSuccess, brandId }: ConnectModalProps) {
+function ConnectModal({ gateway, onClose, onSuccess, brandId }: {
+    gateway: GatewayKey; onClose: () => void; onSuccess: () => void; brandId: string
+}) {
     const meta = GATEWAYS[gateway]
     const [values, setValues] = useState<Record<string, string>>({})
     const [loading, setLoading] = useState(false)
@@ -89,12 +95,8 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: ConnectModalProp
                         <Zap className="w-5 h-5" style={{ color: "var(--color-accent)" }} />
                     </div>
                     <div>
-                        <h2 className="text-base font-bold font-display" style={{ color: "var(--color-text-primary)" }}>
-                            Connect {meta.label}
-                        </h2>
-                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>
-                            Your credentials are encrypted and stored securely
-                        </p>
+                        <h2 className="text-base font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Connect {meta.label}</h2>
+                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Your credentials are encrypted and stored securely</p>
                     </div>
                 </div>
 
@@ -110,8 +112,7 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: ConnectModalProp
                     <form onSubmit={handleConnect} className="space-y-4">
                         {meta.fields.map(field => (
                             <div key={field.name} className="space-y-1.5">
-                                <label className="block text-xs font-semibold font-body"
-                                    style={{ color: "var(--color-text-secondary)" }}>
+                                <label className="block text-xs font-semibold font-body" style={{ color: "var(--color-text-secondary)" }}>
                                     {field.label}
                                 </label>
                                 <input
@@ -132,27 +133,23 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: ConnectModalProp
                                 />
                             </div>
                         ))}
-
-                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>
-                            {meta.hint}
-                        </p>
+                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{meta.hint}</p>
 
                         {error && (
                             <div className="flex items-start gap-2 p-3 rounded-xl text-xs font-body"
                                 style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444" }}>
-                                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                {error}
+                                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
                             </div>
                         )}
 
                         <div className="flex gap-3 pt-1">
                             <button type="button" onClick={onClose}
-                                className="flex-1 h-11 rounded-xl text-sm font-semibold font-body transition-colors"
+                                className="flex-1 h-11 rounded-xl text-sm font-semibold font-body"
                                 style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>
                                 Cancel
                             </button>
                             <button type="submit" disabled={loading}
-                                className="flex-1 h-11 rounded-xl text-sm font-bold font-body transition-opacity disabled:opacity-60"
+                                className="flex-1 h-11 rounded-xl text-sm font-bold font-body disabled:opacity-60"
                                 style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
                                 {loading ? "Connecting..." : `Connect ${meta.label}`}
                             </button>
@@ -166,13 +163,8 @@ function ConnectModal({ gateway, onClose, onSuccess, brandId }: ConnectModalProp
 
 // ── Gateway Card ──────────────────────────────────────────────────────────────
 
-function GatewayCard({
-    gatewayKey, integration, onConnect, available,
-}: {
-    gatewayKey: GatewayKey
-    integration: Integration | undefined
-    onConnect: () => void
-    available: boolean
+function GatewayCard({ gatewayKey, integration, onConnect, available }: {
+    gatewayKey: GatewayKey; integration: Integration | undefined; onConnect: () => void; available: boolean
 }) {
     const meta = GATEWAYS[gatewayKey]
     const connected = integration?.status === "connected"
@@ -186,10 +178,7 @@ function GatewayCard({
             <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold"
-                        style={{
-                            backgroundColor: connected ? "rgba(0,201,167,0.1)" : "var(--color-surface-raised)",
-                            color: connected ? "var(--color-accent)" : "var(--color-text-muted)",
-                        }}>
+                        style={{ backgroundColor: connected ? "rgba(0,201,167,0.1)" : "var(--color-surface-raised)", color: connected ? "var(--color-accent)" : "var(--color-text-muted)" }}>
                         {meta.label[0]}
                     </div>
                     <div>
@@ -217,32 +206,27 @@ function GatewayCard({
 
             {connected && (
                 <div className="mt-5 grid grid-cols-2 gap-4">
-                    <div className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
-                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Last synced</p>
-                        <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>
-                            {fmt(integration!.last_sync_at)}
-                        </p>
-                    </div>
-                    <div className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
-                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Orders imported</p>
-                        <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>
-                            {integration!.transaction_count.toLocaleString()}
-                        </p>
-                    </div>
+                    {[
+                        { label: "Last synced", value: fmt(integration!.last_sync_at) },
+                        { label: "Orders imported", value: integration!.transaction_count.toLocaleString() },
+                    ].map(s => (
+                        <div key={s.label} className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                            <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{s.label}</p>
+                            <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>{s.value}</p>
+                        </div>
+                    ))}
                 </div>
             )}
 
             {available && (
                 <div className="mt-5">
                     {connected ? (
-                        <button onClick={onConnect}
-                            className="flex items-center gap-2 px-4 h-9 rounded-xl text-sm font-semibold font-body transition-colors"
+                        <button onClick={onConnect} className="flex items-center gap-2 px-4 h-9 rounded-xl text-sm font-semibold font-body"
                             style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>
                             <RefreshCw className="w-3.5 h-3.5" /> Re-connect / Update Key
                         </button>
                     ) : (
-                        <button onClick={onConnect}
-                            className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body transition-opacity"
+                        <button onClick={onConnect} className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
                             style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
                             <Plus className="w-4 h-4" /> Connect {meta.label}
                         </button>
@@ -269,7 +253,6 @@ export default function IntegrationsPage() {
             setIntegrations([])
         }
     }
-
     useEffect(() => { load() }, [activeBrandId])
 
     const find = (type: string) => integrations.find(i => i.type === type)
@@ -277,31 +260,19 @@ export default function IntegrationsPage() {
     return (
         <div className="p-8 max-w-3xl space-y-6">
             <div>
-                <h1 className="text-2xl font-bold font-display" style={{ color: "var(--color-text-primary)" }}>
-                    Integrations
-                </h1>
+                <h1 className="text-2xl font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Integrations</h1>
                 <p className="mt-1 text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
                     Connect your payment gateways to automatically import orders and customers.
                 </p>
             </div>
 
-            {(["paystack", "flutterwave", "monnify"] as GatewayKey[]).map(key => (
+            {(Object.keys(GATEWAYS) as GatewayKey[]).map(key => (
                 <GatewayCard
                     key={key}
                     gatewayKey={key}
                     integration={find(key)}
                     onConnect={() => setModal(key)}
                     available={true}
-                />
-            ))}
-
-            {["OPay"].map(name => (
-                <GatewayCard
-                    key={name}
-                    gatewayKey={"paystack"}
-                    integration={undefined}
-                    onConnect={() => {}}
-                    available={false}
                 />
             ))}
 
