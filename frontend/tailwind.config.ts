@@ -9,6 +9,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // ORYNT brand tokens
+        "orynt-bg":             "#0A0A0F",
+        "orynt-surface":        "#111118",
+        "orynt-surface-raised": "#17171F",
+        "orynt-border":         "#1F1F2E",
+        "orynt-border-subtle":  "#161622",
+        "orynt-text":           "#F4F4F6",
+        "orynt-text-secondary": "#9898AE",
+        "orynt-text-muted":     "#5C5C73",
+        "orynt-accent":         "#00C9A7",
+        "orynt-accent-hover":   "#00B396",
+        "orynt-scale":          "#22C55E",
+        "orynt-monitor":        "#EAB308",
+        "orynt-fix":            "#F97316",
+        "orynt-kill":           "#EF4444",
+        "orynt-chart-1":        "#00C9A7",
+        "orynt-chart-2":        "#818CF8",
+        "orynt-chart-3":        "#FB923C",
+        "orynt-chart-4":        "#F472B6",
+        // shadcn/ui compat tokens (kept for shadcn components)
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
@@ -43,13 +63,30 @@ const config: Config = {
           foreground: "hsl(var(--popover-foreground))",
         },
       },
+      fontFamily: {
+        display: ["Syne", "sans-serif"],
+        body:    ["DM Sans", "sans-serif"],
+        mono:    ["JetBrains Mono", "monospace"],
+        sans:    ["DM Sans", "sans-serif"], // default override
+      },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        sm:   "4px",
+        md:   "8px",
+        lg:   "12px",
+        xl:   "16px",
+        "2xl": "24px",
+        full: "9999px",
+      },
+      boxShadow: {
+        "orynt-sm":  "0 1px 2px rgba(0,0,0,0.4)",
+        "orynt-md":  "0 2px 8px rgba(0,0,0,0.5)",
+        "orynt-lg":  "0 4px 16px rgba(0,0,0,0.6)",
+        "orynt-xl":  "0 8px 32px rgba(0,0,0,0.7)",
+        "orynt-focus": "0 0 0 3px rgba(0,201,167,0.20)",
       },
     },
   },
   plugins: [],
 };
+
 export default config;

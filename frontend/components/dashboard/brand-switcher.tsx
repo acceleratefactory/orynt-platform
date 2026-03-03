@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronDown, CheckIcon, Plus, Tag } from "lucide-react"
-import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/auth"
 import api from "@/lib/api"
 
@@ -20,25 +19,19 @@ export function BrandSwitcher() {
     const [open, setOpen] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
 
-    // Close dropdown if clicking outside
     useEffect(() => {
         const handler = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) {
-                setOpen(false)
-            }
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
         }
         document.addEventListener("mousedown", handler)
         return () => document.removeEventListener("mousedown", handler)
     }, [])
 
-    // Load brands and auto-set the first one if needed
     useEffect(() => {
         api.get("/api/brands").then((res) => {
             const list: Brand[] = res.data
             setBrands(list)
-            if (list.length > 0 && !activeBrandId) {
-                setActiveBrandId(list[0].id)
-            }
+            if (list.length > 0 && !activeBrandId) setActiveBrandId(list[0].id)
         }).catch(() => {})
     }, [])
 
@@ -48,95 +41,130 @@ export function BrandSwitcher() {
     const handleSelect = (brand: Brand) => {
         setActiveBrandId(brand.id)
         setOpen(false)
-        // TanStack Query / components that depend on activeBrandId will re-fetch automatically
     }
 
     if (!activeBrand) {
         return (
-            <div className="mx-4 h-12 rounded-2xl bg-slate-800/30 animate-pulse" />
+            <div className="space-y-1">
+                <div className="h-14 rounded-md animate-pulse" style={{ backgroundColor: "var(--color-surface-raised)" }} />
+                <div className="h-7 rounded-md animate-pulse" style={{ backgroundColor: "var(--color-surface-raised)", opacity: 0.5 }} />
+            </div>
         )
     }
 
     return (
-        <div ref={ref} className="relative mx-4">
+        <div ref={ref} className="relative">
+            {/* Active brand card */}
             <button
                 onClick={() => hasMultipleBrands && setOpen((o) => !o)}
-                className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200",
-                    "bg-slate-800/40 border border-slate-700/40 text-left",
-                    hasMultipleBrands
-                        ? "hover:bg-slate-800/70 cursor-pointer"
-                        : "cursor-default"
-                )}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150"
+                style={{
+                    backgroundColor: "var(--color-surface-raised)",
+                    border: "1px solid var(--color-border)",
+                    cursor: hasMultipleBrands ? "pointer" : "default",
+                }}
+                onMouseEnter={e => { if (hasMultipleBrands) e.currentTarget.style.borderColor = "var(--color-accent-border)" }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--color-border)" }}
             >
-                <div className="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <Tag className="w-4 h-4 text-primary" />
+                {/* Brand icon */}
+                <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: "var(--color-accent-dim)" }}
+                >
+                    <Tag className="w-3 h-3" style={{ color: "var(--color-accent)" }} strokeWidth={1.5} />
                 </div>
-                <div className="flex-1 overflow-hidden">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-0.5">
-                        Active Brand
-                    </p>
-                    <p className="text-sm font-bold text-white truncate leading-tight">
+                <div className="flex-1 overflow-hidden text-left">
+                    <p
+                        className="text-[13px] font-semibold truncate font-body"
+                        style={{ color: "var(--color-text-primary)" }}
+                    >
                         {activeBrand.name}
                     </p>
-                    <p className="text-[10px] text-slate-500 truncate leading-none mt-0.5">
+                    <p
+                        className="text-[11px] truncate font-body"
+                        style={{ color: "var(--color-text-muted)" }}
+                    >
                         {activeBrand.category}
                     </p>
                 </div>
                 {hasMultipleBrands && (
                     <ChevronDown
-                        className={cn(
-                            "w-4 h-4 text-slate-400 flex-shrink-0 transition-transform duration-200",
-                            open && "rotate-180"
-                        )}
+                        className="w-4 h-4 flex-shrink-0 transition-transform duration-150"
+                        style={{ color: "var(--color-text-muted)", transform: open ? "rotate(180deg)" : "none" }}
+                        strokeWidth={1.5}
                     />
                 )}
             </button>
 
-            {/* Dropdown */}
+            {/* Dropdown — multi-brand only */}
             {open && hasMultipleBrands && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                    <div className="p-2 space-y-0.5 max-h-64 overflow-y-auto">
+                <div
+                    className="absolute top-full left-0 right-0 mt-1 z-50 overflow-hidden rounded-lg"
+                    style={{
+                        backgroundColor: "var(--color-surface-raised)",
+                        border: "1px solid var(--color-border)",
+                        boxShadow: "var(--shadow-lg)",
+                        minWidth: "220px",
+                    }}
+                >
+                    <div className="p-2 space-y-0.5 max-h-80 overflow-y-auto">
                         {brands.map((brand) => (
                             <button
                                 key={brand.id}
                                 onClick={() => handleSelect(brand)}
-                                className={cn(
-                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors",
-                                    brand.id === activeBrandId
-                                        ? "bg-primary/20 text-white"
-                                        : "text-slate-300 hover:bg-slate-800"
-                                )}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-colors duration-100 font-body"
+                                style={brand.id === activeBrandId
+                                    ? { backgroundColor: "var(--color-accent-dim)", color: "var(--color-text-primary)" }
+                                    : { color: "var(--color-text-secondary)" }
+                                }
+                                onMouseEnter={e => { if (brand.id !== activeBrandId) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)" }}
+                                onMouseLeave={e => { if (brand.id !== activeBrandId) e.currentTarget.style.backgroundColor = "transparent" }}
                             >
-                                <div className="w-7 h-7 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
-                                    <Tag className="w-3.5 h-3.5 text-slate-400" />
-                                </div>
-                                <div className="flex-1 overflow-hidden">
-                                    <p className="text-sm font-semibold truncate">{brand.name}</p>
-                                    <p className="text-[10px] text-slate-500 truncate">{brand.category}</p>
+                                <div>
+                                    <p className="text-sm font-medium truncate">{brand.name}</p>
+                                    <p className="text-[10px] truncate" style={{ color: "var(--color-text-muted)" }}>{brand.category}</p>
                                 </div>
                                 {brand.id === activeBrandId && (
-                                    <CheckIcon className="w-4 h-4 text-primary flex-shrink-0" />
+                                    <CheckIcon className="w-4 h-4 ml-auto flex-shrink-0" style={{ color: "var(--color-accent)" }} strokeWidth={1.5} />
                                 )}
                             </button>
                         ))}
                     </div>
-
-                    {/* Divider + Add New Brand */}
-                    <div className="border-t border-slate-700/60 p-2">
+                    {/* Divider */}
+                    <div style={{ height: "1px", backgroundColor: "var(--color-border)", margin: "0 8px" }} />
+                    {/* Add New Brand inside dropdown too */}
+                    <div className="p-2">
                         <button
-                            onClick={() => {
-                                setOpen(false)
-                                router.push("/dashboard/settings/brands/new")
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-primary hover:bg-primary/10 transition-colors text-sm font-bold"
+                            onClick={() => { setOpen(false); router.push("/dashboard/settings/brands/new") }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm font-medium font-body transition-colors duration-100"
+                            style={{ color: "var(--color-accent)" }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = "var(--color-accent-dim)"}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}
                         >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="w-4 h-4" strokeWidth={1.5} />
                             Add New Brand
                         </button>
                     </div>
                 </div>
             )}
+
+            {/* Add New Brand — ALWAYS visible below the card */}
+            <button
+                onClick={() => { setOpen(false); router.push("/dashboard/settings/brands/new") }}
+                className="w-full flex items-center gap-2 px-3 py-2 mt-1 rounded-md text-xs font-medium font-body transition-all duration-150"
+                style={{ color: "var(--color-text-muted)" }}
+                onMouseEnter={e => {
+                    e.currentTarget.style.backgroundColor = "var(--color-accent-dim)"
+                    e.currentTarget.style.color = "var(--color-accent)"
+                }}
+                onMouseLeave={e => {
+                    e.currentTarget.style.backgroundColor = "transparent"
+                    e.currentTarget.style.color = "var(--color-text-muted)"
+                }}
+            >
+                <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
+                Add New Brand
+            </button>
         </div>
     )
 }

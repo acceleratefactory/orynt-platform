@@ -9,11 +9,15 @@ export default function DashboardLayout({
     children: React.ReactNode
 }) {
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen" style={{ backgroundColor: "var(--color-bg)" }}>
             <Sidebar />
-            <div className="pl-64 flex flex-col min-h-screen">
+            {/* 240px left margin = sidebar width; 64px top = header height */}
+            <div className="ml-60 flex flex-col min-h-screen">
                 <Header />
-                <main className="flex-1">
+                <main
+                    className="flex-1 mt-16"
+                    style={{ backgroundColor: "var(--color-bg)" }}
+                >
                     {children}
                 </main>
             </div>

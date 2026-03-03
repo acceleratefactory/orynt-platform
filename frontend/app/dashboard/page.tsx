@@ -5,22 +5,13 @@ import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/auth"
 import { SetupFlow } from "@/components/onboarding/setup-flow"
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow"
-import { cn } from "@/lib/utils"
-import {
-    RocketIcon,
-    StoreIcon,
-    TagIcon,
-    LayoutDashboardIcon,
-    LogOut,
-} from "lucide-react"
+import { LogOut, Store, Tag, LayoutDashboard, Rocket } from "lucide-react"
 import api from "@/lib/api"
 
 interface Organization {
     id: string
     name: string
     owner_email: string
-    owner_phone: string | null
-    created_at: string
 }
 
 interface Brand {
@@ -52,196 +43,237 @@ export default function DashboardPage() {
             const list: Brand[] = brandsRes.data
             setBrands(list)
 
-            if (list.length === 0) {
-                setState("no-brand")
-                return
-            }
+            if (list.length === 0) { setState("no-brand"); return }
 
-            // Auto-select first brand; or stick with already-active brand
             const targetId = activeBrandId ?? list[0].id
             setActiveBrandId(targetId)
             const target = list.find((b) => b.id === targetId) ?? list[0]
             setActiveBrand(target)
 
-            // If onboarding not completed, show onboarding flow
-            if (!target.onboarding_completed) {
-                setState("onboarding")
-            } else {
-                setState("ready")
-            }
+            setState(!target.onboarding_completed ? "onboarding" : "ready")
         } catch (err: any) {
-            if (err?.response?.status === 404) {
-                setState("no-org")
-            } else {
-                console.error("Dashboard load error:", err)
-                setState("no-org")
-            }
+            setState(err?.response?.status === 404 ? "no-org" : "no-org")
         }
     }
 
-    // Re-fetch when activeBrandId changes (brand switch)
     useEffect(() => {
         if (activeBrandId && brands.length > 0) {
             const found = brands.find((b) => b.id === activeBrandId)
             if (found) {
                 setActiveBrand(found)
-                if (!found.onboarding_completed) {
-                    setState("onboarding")
-                } else {
-                    setState("ready")
-                }
+                setState(!found.onboarding_completed ? "onboarding" : "ready")
             }
         }
     }, [activeBrandId])
+
+    useEffect(() => { loadData() }, [])
 
     const handleLogout = async () => {
         await clearSession()
         router.push("/auth/login")
     }
 
-    useEffect(() => {
-        loadData()
-    }, [])
-
+    // ── Loading skeleton ──────────────────────────────────────────────────────
     if (state === "loading") {
         return (
-            <div className="flex h-[calc(100vh-80px)] items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary" />
+            <div className="p-8 space-y-6">
+                <div className="h-8 w-48 rounded-lg animate-pulse" style={{ backgroundColor: "var(--color-surface-raised)" }} />
+                <div className="grid grid-cols-3 gap-4">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="h-36 rounded-lg animate-pulse" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }} />
+                    ))}
+                </div>
             </div>
         )
     }
 
-    if (state === "no-org") {
-        return (
-            <div className="fixed inset-0 z-[100] bg-white">
-                <SetupFlow onComplete={loadData} />
-            </div>
-        )
-    }
-
-    if (state === "no-brand") {
-        return (
-            <div className="fixed inset-0 z-[100] bg-white">
-                <SetupFlow onComplete={loadData} skipToStep={2} />
-            </div>
-        )
-    }
-
-    // New user: onboarding not completed for active brand
-    if (state === "onboarding" && activeBrand) {
-        return (
-            <div className="fixed inset-0 z-[100] bg-white">
-                <OnboardingFlow
-                    brandId={activeBrand.id}
-                    brandName={activeBrand.name}
-                    onComplete={loadData}
-                />
-            </div>
-        )
-    }
+    if (state === "no-org") return <div className="fixed inset-0 z-[100]" style={{ backgroundColor: "var(--color-bg)" }}><SetupFlow onComplete={loadData} /></div>
+    if (state === "no-brand") return <div className="fixed inset-0 z-[100]" style={{ backgroundColor: "var(--color-bg)" }}><SetupFlow onComplete={loadData} skipToStep={2} /></div>
+    if (state === "onboarding" && activeBrand) return (
+        <div className="fixed inset-0 z-[100]" style={{ backgroundColor: "var(--color-bg)" }}>
+            <OnboardingFlow brandId={activeBrand.id} brandName={activeBrand.name} onComplete={loadData} />
+        </div>
+    )
 
     return (
-        <div className="p-8 space-y-8">
-            {/* Page heading */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="p-8 space-y-8 max-w-[1400px]">
+
+            {/* ── Page header ──────────────────────────────────────────────── */}
+            <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Overview</h2>
-                    <p className="text-slate-500 text-sm mt-1">Welcome back, {user?.email}</p>
+                    <h1 className="text-3xl font-bold font-display tracking-tight" style={{ color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
+                        Overview
+                    </h1>
+                    <p className="text-sm mt-1 font-body" style={{ color: "var(--color-text-muted)" }}>
+                        Welcome back, {user?.email}
+                    </p>
                 </div>
                 <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all text-sm font-semibold w-fit"
+                    className="flex items-center gap-2 px-4 h-10 rounded-md text-sm font-medium font-body transition-colors duration-150"
+                    style={{ color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}
+                    onMouseEnter={e => {
+                        e.currentTarget.style.backgroundColor = "var(--color-surface-raised)"
+                        e.currentTarget.style.color = "var(--color-text-primary)"
+                    }}
+                    onMouseLeave={e => {
+                        e.currentTarget.style.backgroundColor = "transparent"
+                        e.currentTarget.style.color = "var(--color-text-muted)"
+                    }}
                 >
-                    <LogOut className="w-4 h-4" />
+                    <LogOut className="w-4 h-4" strokeWidth={1.5} />
                     Log out
                 </button>
             </div>
 
-            {/* Info cards */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow flex items-start gap-5">
-                    <div className="bg-primary/10 p-3 rounded-2xl">
-                        <StoreIcon className="w-6 h-6 text-primary" />
+            {/* ── Metric cards row ──────────────────────────────────────────── */}
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+                {/* Organization */}
+                <div
+                    className="rounded-lg p-6 flex items-start gap-4"
+                    style={{
+                        backgroundColor: "var(--color-surface)",
+                        border: "1px solid var(--color-border)",
+                        minHeight: "140px",
+                    }}
+                >
+                    <div className="p-2.5 rounded-md flex-shrink-0" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                        <Store className="w-5 h-5" style={{ color: "var(--color-text-muted)" }} strokeWidth={1.5} />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Organization</p>
-                        <p className="text-xl font-bold text-slate-900 truncate">{org?.name}</p>
-                        <p className="text-xs text-slate-400 mt-1 truncate">{org?.owner_email}</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-widest font-body mb-3" style={{ color: "var(--color-text-muted)", letterSpacing: "0.06em" }}>
+                            Organization
+                        </p>
+                        <p className="text-2xl font-bold font-display truncate" style={{ color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
+                            {org?.name}
+                        </p>
+                        <p className="text-xs mt-1 truncate font-body" style={{ color: "var(--color-text-muted)" }}>
+                            {org?.owner_email}
+                        </p>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow flex items-start gap-5">
-                    <div className="bg-violet-100 p-3 rounded-2xl">
-                        <TagIcon className="w-6 h-6 text-violet-600" />
+                {/* Active Brand */}
+                <div
+                    className="rounded-lg p-6 flex items-start gap-4"
+                    style={{
+                        backgroundColor: "var(--color-surface)",
+                        border: "1px solid var(--color-border)",
+                        minHeight: "140px",
+                    }}
+                >
+                    <div className="p-2.5 rounded-md flex-shrink-0" style={{ backgroundColor: "var(--color-accent-dim)" }}>
+                        <Tag className="w-5 h-5" style={{ color: "var(--color-accent)" }} strokeWidth={1.5} />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Active Brand</p>
-                        <p className="text-xl font-bold text-slate-900 truncate">{activeBrand?.name}</p>
-                        <p className="text-xs text-slate-400 mt-1">{activeBrand?.category}</p>
-                        {activeBrand?.seller_type && (
-                            <span className="inline-block mt-2 text-[10px] font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full capitalize">
-                                {activeBrand.seller_type.replace("_", " ")}
-                            </span>
-                        )}
+                        <p className="text-[11px] font-semibold uppercase tracking-widest font-body mb-3" style={{ color: "var(--color-text-muted)", letterSpacing: "0.06em" }}>
+                            Active Brand
+                        </p>
+                        <p className="text-2xl font-bold font-display truncate" style={{ color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
+                            {activeBrand?.name}
+                        </p>
+                        <p className="text-xs mt-1 font-body" style={{ color: "var(--color-text-muted)" }}>
+                            {activeBrand?.category}
+                            {activeBrand?.seller_type && (
+                                <span
+                                    className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold font-body capitalize"
+                                    style={{ backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)" }}
+                                >
+                                    {activeBrand.seller_type.replace("_", " ")}
+                                </span>
+                            )}
+                        </p>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow flex items-start gap-5">
-                    <div className="bg-emerald-50 p-3 rounded-2xl">
-                        <LayoutDashboardIcon className="w-6 h-6 text-emerald-500" />
+                {/* Brands count */}
+                <div
+                    className="rounded-lg p-6 flex items-start gap-4"
+                    style={{
+                        backgroundColor: "var(--color-surface)",
+                        border: "1px solid var(--color-border)",
+                        minHeight: "140px",
+                    }}
+                >
+                    <div className="p-2.5 rounded-md flex-shrink-0" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                        <LayoutDashboard className="w-5 h-5" style={{ color: "var(--color-text-muted)" }} strokeWidth={1.5} />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Brands</p>
-                        <p className="text-xl font-bold text-slate-900">{brands.length}</p>
-                        <p className="text-xs text-slate-400 mt-1">registered brand{brands.length !== 1 ? "s" : ""}</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-widest font-body mb-3" style={{ color: "var(--color-text-muted)", letterSpacing: "0.06em" }}>
+                            Brands
+                        </p>
+                        <p className="text-4xl font-bold font-display" style={{ color: "var(--color-text-primary)", letterSpacing: "-0.02em", lineHeight: "1" }}>
+                            {brands.length}
+                        </p>
+                        <p className="text-xs mt-2 font-body" style={{ color: "var(--color-text-muted)" }}>
+                            registered brand{brands.length !== 1 ? "s" : ""}
+                        </p>
                     </div>
                 </div>
             </div>
 
-            {/* Multi-brand switcher list */}
+            {/* ── Multi-brand list ────────────────────────────────────────── */}
             {brands.length > 1 && (
-                <div className="bg-white rounded-[28px] p-7 border border-slate-100 premium-shadow">
-                    <h3 className="text-sm font-bold text-slate-900 mb-5 uppercase tracking-widest">All Brands</h3>
-                    <div className="divide-y divide-slate-50">
-                        {brands.map((b) => (
-                            <div
-                                key={b.id}
-                                className="flex items-center justify-between py-4 cursor-pointer hover:bg-slate-50 px-2 rounded-xl transition-colors"
-                                onClick={() => setActiveBrandId(b.id)}
-                            >
-                                <div>
-                                    <p className="font-bold text-slate-900 text-sm">{b.name}</p>
-                                    <p className="text-xs text-slate-400 mt-0.5">{b.category}</p>
-                                </div>
-                                <span className={cn(
-                                    "text-[10px] font-bold px-3 py-1 rounded-full",
-                                    b.id === activeBrandId
-                                        ? "bg-primary text-white"
-                                        : "bg-slate-100 text-slate-500"
-                                )}>
-                                    {b.id === activeBrandId ? "Active" : "Switch"}
-                                </span>
-                            </div>
-                        ))}
+                <div
+                    className="rounded-lg overflow-hidden"
+                    style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}
+                >
+                    <div className="px-6 py-4" style={{ borderBottom: "1px solid var(--color-border)", backgroundColor: "var(--color-surface-raised)" }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-widest font-body" style={{ color: "var(--color-text-muted)", letterSpacing: "0.06em" }}>
+                            All Brands
+                        </p>
                     </div>
+                    {brands.map((b, i) => (
+                        <div
+                            key={b.id}
+                            className="flex items-center justify-between px-6 cursor-pointer transition-colors duration-100"
+                            style={{
+                                height: "52px",
+                                borderBottom: i < brands.length - 1 ? "1px solid var(--color-border-subtle)" : "none",
+                            }}
+                            onClick={() => setActiveBrandId(b.id)}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = "var(--color-surface-raised)")}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                        >
+                            <div>
+                                <span className="text-sm font-medium font-body" style={{ color: "var(--color-text-primary)" }}>{b.name}</span>
+                                <span className="text-xs ml-2 font-body" style={{ color: "var(--color-text-muted)" }}>{b.category}</span>
+                            </div>
+                            <span
+                                className="text-[10px] font-semibold px-2.5 py-1 rounded-full font-body"
+                                style={b.id === activeBrandId
+                                    ? { backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)" }
+                                    : { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)" }
+                                }
+                            >
+                                {b.id === activeBrandId ? "Active" : "Switch"}
+                            </span>
+                        </div>
+                    ))}
                 </div>
             )}
 
-            {/* Sprint 2 banner */}
-            <div className="rounded-[28px] p-8 border border-primary/20 bg-primary/5 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-48 h-48 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
-                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-6">
-                    <div className="bg-primary p-4 rounded-3xl">
-                        <RocketIcon className="w-8 h-8 text-white" />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-lg font-bold text-primary">
-                            🚀 {activeBrand?.name} is set up — Analytics coming in Sprint 2!
-                        </h3>
-                        <p className="text-slate-500 text-sm mt-1">
-                            Connect your payment gateways in the next steps to start seeing your data here.
-                        </p>
-                    </div>
+            {/* ── Coming soon banner ──────────────────────────────────────── */}
+            <div
+                className="rounded-lg p-8 flex items-center gap-6"
+                style={{
+                    backgroundColor: "var(--color-surface)",
+                    border: "1px solid var(--color-accent-border)",
+                }}
+            >
+                <div
+                    className="p-4 rounded-lg flex-shrink-0"
+                    style={{ backgroundColor: "var(--color-accent-dim)" }}
+                >
+                    <Rocket className="w-6 h-6" style={{ color: "var(--color-accent)" }} strokeWidth={1.5} />
+                </div>
+                <div>
+                    <h3 className="text-base font-bold font-display" style={{ color: "var(--color-accent)" }}>
+                        {activeBrand?.name} is set up — connect your data sources next
+                    </h3>
+                    <p className="text-sm mt-1 font-body" style={{ color: "var(--color-text-muted)" }}>
+                        Add your payment gateway, import your product catalog, and ORYNT will start scoring your SKUs automatically.
+                    </p>
                 </div>
             </div>
         </div>
