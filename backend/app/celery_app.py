@@ -20,6 +20,7 @@ celery_app = Celery(
         "app.tasks.flutterwave_tasks",
         "app.tasks.monnify_tasks",
         "app.tasks.opay_tasks",
+        "app.tasks.mono_tasks",
     ],
 )
 

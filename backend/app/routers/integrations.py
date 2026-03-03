@@ -1,7 +1,7 @@
 """
 ORYNT — Integrations Router
-All payment gateway connect endpoints + list.
-Paystack, Flutterwave, Monnify, OPay.
+All payment gateway connect endpoints + Mono Open Banking + list.
+Paystack, Flutterwave, Monnify, OPay, Mono.
 """
 
 import os
@@ -29,9 +29,11 @@ FLW_BASE = "https://api.flutterwave.com/v3"
 MONNIFY_BASE = "https://api.monnify.com"
 OPAY_BASE_PROD = "https://cashierapi.opayweb.com"
 OPAY_BASE_SANDBOX = "https://sandboxapi.opayweb.com"
+MONO_BASE = "https://api.withmono.com/v2"
 
 ENCRYPTION_KEY = os.getenv("PAYSTACK_ENCRYPTION_KEY", "")
 OPAY_ENV = os.getenv("OPAY_ENV", "sandbox")
+MONO_SECRET_KEY = os.getenv("MONO_SECRET_KEY", "")
 
 
 def _opay_base() -> str:
@@ -41,6 +43,11 @@ def _opay_base() -> str:
 def _encrypt(value: str) -> str:
     f = Fernet(ENCRYPTION_KEY.encode())
     return f.encrypt(value.encode()).decode()
+
+
+def _decrypt(value: str) -> str:
+    f = Fernet(ENCRYPTION_KEY.encode())
+    return f.decrypt(value.encode()).decode()
 
 
 def _upsert_integration(db: Session, brand_id: str, gateway: str, encrypted_value: str) -> Integration:
@@ -69,6 +76,10 @@ def _opay_auth_headers(payload: dict, private_key: str, merchant_id: str) -> dic
     }
 
 
+def _mono_headers() -> dict:
+    return {"mono-sec-key": MONO_SECRET_KEY, "Content-Type": "application/json"}
+
+
 # ── Request models ────────────────────────────────────────────────────────────
 
 class PaystackConnectRequest(BaseModel):
@@ -89,6 +100,14 @@ class OpayConnectRequest(BaseModel):
     merchant_id: str
     public_key: str
     private_key: str
+    brand_id: str
+
+class MonoInitiateRequest(BaseModel):
+    brand_id: str
+    redirect_url: str | None = None
+
+class MonoExchangeRequest(BaseModel):
+    code: str
     brand_id: str
 
 
@@ -135,7 +154,7 @@ def connect_flutterwave(body: FlutterwaveConnectRequest, user: dict = Depends(ge
         from app.tasks.flutterwave_tasks import pull_flutterwave_history
         pull_flutterwave_history.delay(body.brand_id, integration.id)
     except Exception as exc:
-        logger.warning(f"[Flutterwave] Could not queue Celery task: {exc}")
+        logger.warning(f"[Flutterwave] Could not queue task: {exc}")
     return {"status": "connected", "integration_id": integration.id,
             "message": "Flutterwave connected. Historical data sync started in the background."}
 
@@ -161,7 +180,7 @@ def connect_monnify(body: MonnifyConnectRequest, user: dict = Depends(get_curren
         from app.tasks.monnify_tasks import pull_monnify_history
         pull_monnify_history.delay(body.brand_id, integration.id)
     except Exception as exc:
-        logger.warning(f"[Monnify] Could not queue Celery task: {exc}")
+        logger.warning(f"[Monnify] Could not queue task: {exc}")
     return {"status": "connected", "integration_id": integration.id,
             "message": "Monnify connected. Historical data sync started in the background."}
 
@@ -170,54 +189,111 @@ def connect_monnify(body: MonnifyConnectRequest, user: dict = Depends(get_curren
 
 @router.post("/opay/connect")
 def connect_opay(body: OpayConnectRequest, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    brand = db.get(Brand, body.brand_id)
+    if not brand:
+        raise HTTPException(status_code=404, detail="Brand not found")
+    payload = {"merchantId": body.merchant_id}
+    headers = _opay_auth_headers(payload, body.private_key, body.merchant_id)
+    try:
+        resp = httpx.post(f"{_opay_base()}/api/v1/international/cashier/queryMerchantBalance",
+                          headers=headers, json=payload, timeout=15)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach OPay: {exc}")
+    resp_data = resp.json() if resp.content else {}
+    opay_code = str(resp_data.get("code", ""))
+    if resp.status_code not in (200, 201) or opay_code not in ("00000", "0", "02000"):
+        raise HTTPException(status_code=400, detail=f"Invalid OPay credentials (code: {opay_code}).")
+    creds_json = json.dumps({"merchant_id": body.merchant_id, "public_key": body.public_key, "private_key": body.private_key})
+    integration = _upsert_integration(db, body.brand_id, "opay", _encrypt(creds_json))
+    try:
+        from app.tasks.opay_tasks import pull_opay_history
+        pull_opay_history.delay(body.brand_id, integration.id)
+    except Exception as exc:
+        logger.warning(f"[OPay] Could not queue task: {exc}")
+    return {"status": "connected", "integration_id": integration.id,
+            "message": "OPay connected. Historical data sync started in the background."}
+
+
+# ── Mono ──────────────────────────────────────────────────────────────────────
+
+@router.post("/mono/initiate")
+def mono_initiate(body: MonoInitiateRequest, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Validate OPay credentials via transaction inquiry, then store encrypted and queue sync.
-    OPay auth: HMAC-SHA512 of sorted JSON body with private_key.
-    Authorization: Bearer {signature} MerchantId:{merchant_id}
+    Start the Mono Connect flow. Returns a mono_url to open in the Connect widget.
+    POST https://api.withmono.com/v2/accounts/initiate
     """
     brand = db.get(Brand, body.brand_id)
     if not brand:
         raise HTTPException(status_code=404, detail="Brand not found")
 
-    # Validate via a minimal balance/account inquiry call
-    payload = {"merchantId": body.merchant_id}
-    headers = _opay_auth_headers(payload, body.private_key, body.merchant_id)
+    if not MONO_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="MONO_SECRET_KEY not configured.")
+
+    redirect_url = body.redirect_url or "http://localhost:3000/dashboard/integrations"
 
     try:
         resp = httpx.post(
-            f"{_opay_base()}/api/v1/international/cashier/queryMerchantBalance",
-            headers=headers,
-            json=payload,
+            f"{MONO_BASE}/accounts/initiate",
+            headers=_mono_headers(),
+            json={
+                "app": MONO_SECRET_KEY,
+                "scope": "statements",
+                "redirect_url": redirect_url,
+                "meta": {"ref": body.brand_id},
+            },
             timeout=15,
         )
+        resp.raise_for_status()
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Could not reach OPay: {exc}")
+        raise HTTPException(status_code=502, detail=f"Could not reach Mono: {exc}")
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=400, detail=f"Mono initiate failed: {exc.response.text}")
 
-    resp_data = resp.json() if resp.content else {}
-    opay_code = str(resp_data.get("code", ""))
+    data = resp.json()
+    mono_url = data.get("data", {}).get("mono_url") or data.get("mono_url")
+    token = data.get("data", {}).get("token") or data.get("token")
 
-    # Accept 00000 (success) or 02000 (no merchant balance — still valid credentials)
-    if resp.status_code not in (200, 201) or opay_code not in ("00000", "0", "02000"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid OPay credentials — validation failed (code: {opay_code}).",
-        )
+    return {"mono_url": mono_url, "token": token}
 
-    creds_json = json.dumps({
-        "merchant_id": body.merchant_id,
-        "public_key": body.public_key,
-        "private_key": body.private_key,
-    })
-    integration = _upsert_integration(db, body.brand_id, "opay", _encrypt(creds_json))
+
+@router.post("/mono/exchange")
+def mono_exchange(body: MonoExchangeRequest, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Exchange the Mono Connect code for an account_id, store it, and queue history pull.
+    POST https://api.withmono.com/v2/accounts/auth
+    """
+    brand = db.get(Brand, body.brand_id)
+    if not brand:
+        raise HTTPException(status_code=404, detail="Brand not found")
 
     try:
-        from app.tasks.opay_tasks import pull_opay_history
-        pull_opay_history.delay(body.brand_id, integration.id)
+        resp = httpx.post(
+            f"{MONO_BASE}/accounts/auth",
+            headers=_mono_headers(),
+            json={"code": body.code},
+            timeout=15,
+        )
+        resp.raise_for_status()
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach Mono: {exc}")
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=400, detail=f"Mono code exchange failed: {exc.response.text}")
+
+    data = resp.json()
+    account_id = data.get("id") or data.get("data", {}).get("id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="Mono did not return an account ID.")
+
+    integration = _upsert_integration(db, body.brand_id, "mono", _encrypt(account_id))
+
+    try:
+        from app.tasks.mono_tasks import pull_mono_statements
+        pull_mono_statements.delay(body.brand_id, integration.id)
     except Exception as exc:
-        logger.warning(f"[OPay] Could not queue Celery task: {exc}")
+        logger.warning(f"[Mono] Could not queue task: {exc}")
 
     return {"status": "connected", "integration_id": integration.id,
-            "message": "OPay connected. Historical data sync started in the background."}
+            "message": "Bank account connected. Statement sync started in the background."}
 
 
 # ── List ──────────────────────────────────────────────────────────────────────

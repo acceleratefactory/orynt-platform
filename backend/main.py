@@ -9,7 +9,7 @@ load_dotenv()  # Load .env before anything else imports os.getenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import health, auth, organizations, brands
-from app.routers import integrations, webhooks
+from app.routers import integrations, webhooks, orders
 from app.database import _get_engine
 from app.models.base import Base
 # Import models so SQLAlchemy registers them before create_all
@@ -50,6 +50,7 @@ app.include_router(organizations.router, prefix="/api")
 app.include_router(brands.router, prefix="/api")
 app.include_router(integrations.router)          # prefix already set in router: /api/integrations
 app.include_router(webhooks.router)              # prefix already set in router: /api/webhooks
+app.include_router(orders.router)                # prefix already set in router: /api/orders
 
 # ─── Root ────────────────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)

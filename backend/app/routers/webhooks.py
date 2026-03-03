@@ -4,6 +4,7 @@ POST /api/webhooks/paystack    — HMAC-SHA512 validation, handles charge.succes
 POST /api/webhooks/flutterwave — verif-hash validation, handles charge.completed.
 POST /api/webhooks/monnify     — HMAC-SHA512 validation, handles SUCCESSFUL_TRANSACTION.
 POST /api/webhooks/opay        — HMAC-SHA512 of sorted JSON body, handles payment events.
+POST /api/webhooks/mono        — HMAC-SHA512 validation, handles account_updated (pulls new credits).
 Always returns 200.
 """
 
@@ -468,3 +469,63 @@ def _opay_handle_payment(txn: dict, brand_id: str, db: Session):
         payment_method=_opay_infer_payment_method(txn),
         payment_gateway="opay", external_id=external_id, ordered_at=ordered_at,
     ), db)
+
+
+# ── Mono Webhook ──────────────────────────────────────────────────────────────
+
+MONO_SECRET_KEY = os.getenv("MONO_SECRET_KEY", "")
+
+
+def _verify_mono_sig(raw_body: bytes, provided_sig: str) -> bool:
+    """Mono uses HMAC-SHA512 of raw body with the app's MONO_SECRET_KEY."""
+    if not MONO_SECRET_KEY:
+        return True  # Skip signature check if not configured
+    try:
+        computed = hmac.new(MONO_SECRET_KEY.encode(), raw_body, hashlib.sha512).hexdigest()
+        return hmac.compare_digest(computed, provided_sig)
+    except Exception:
+        return False
+
+
+@router.post("/mono")
+async def mono_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Receive Mono Open Banking webhook events.
+    Handles mono.events.account_updated — triggers incremental statement pull.
+    Always returns 200.
+    """
+    raw_body = await request.body()
+    provided_sig = request.headers.get("mono-webhook-secret", "")
+
+    try:
+        payload = _json.loads(raw_body) if raw_body else {}
+    except Exception:
+        return {"status": "ok"}
+
+    if provided_sig and not _verify_mono_sig(raw_body, provided_sig):
+        logger.warning("[Mono Webhook] Invalid signature")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    event = payload.get("event", "")
+    data = payload.get("data", {})
+    account_id = data.get("account", {}).get("_id") or data.get("account_id", "")
+
+    logger.info(f"[Mono Webhook] event={event} account={account_id}")
+
+    if event in ("mono.events.account_updated", "account_updated"):
+        # Find the integration by account_id
+        from app.models.integration import Integration
+        from cryptography.fernet import Fernet
+
+        for intg in _all_integrations("mono", db):
+            raw = _decrypt_integration_key(intg)
+            if raw and raw == account_id:
+                try:
+                    from app.tasks.mono_tasks import pull_mono_statements
+                    pull_mono_statements.delay(intg.brand_id, intg.id)
+                    logger.info(f"[Mono Webhook] Queued statement pull for brand={intg.brand_id}")
+                except Exception as exc:
+                    logger.warning(f"[Mono Webhook] Could not queue task: {exc}")
+                break
+
+    return {"status": "ok"}
