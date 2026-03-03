@@ -24,7 +24,7 @@ interface Brand {
     onboarding_completed: boolean
 }
 
-type DashboardState = "loading" | "no-org" | "no-brand" | "onboarding" | "ready"
+type DashboardState = "loading" | "no-org" | "no-brand" | "onboarding" | "ready" | "error"
 
 export default function DashboardPage() {
     const { user, clearSession, activeBrandId, setActiveBrandId } = useAuthStore()
@@ -52,7 +52,15 @@ export default function DashboardPage() {
 
             setState(!target.onboarding_completed ? "onboarding" : "ready")
         } catch (err: any) {
-            setState(err?.response?.status === 404 ? "no-org" : "no-org")
+            const status = err?.response?.status
+            if (status === 404) {
+                // Genuinely no org — show setup flow
+                setState("no-org")
+            } else {
+                // Network error, backend down, 500, etc — show retry screen
+                console.error("Dashboard load error:", err)
+                setState("error")
+            }
         }
     }
 
@@ -74,6 +82,26 @@ export default function DashboardPage() {
     }
 
     // ── Loading skeleton ──────────────────────────────────────────────────────
+    if (state === "error") {
+        return (
+            <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] gap-4">
+                <p className="text-lg font-bold font-display" style={{ color: "var(--color-text-primary)" }}>
+                    Could not connect to the server
+                </p>
+                <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
+                    Make sure the backend is running, then try again.
+                </p>
+                <button
+                    onClick={loadData}
+                    className="mt-2 px-5 h-10 rounded-md text-sm font-semibold font-body transition-colors"
+                    style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-inverse)" }}
+                >
+                    Retry
+                </button>
+            </div>
+        )
+    }
+
     if (state === "loading") {
         return (
             <div className="p-8 space-y-6">
