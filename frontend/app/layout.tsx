@@ -47,6 +47,7 @@ export default function RootLayout({
               so the correct CSS variables are active before first paint.
             */}
             <head>
+                <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
                 <script
                     dangerouslySetInnerHTML={{
                         __html: `

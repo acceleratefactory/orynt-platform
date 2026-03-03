@@ -82,23 +82,13 @@ export function Sidebar() {
         >
             {/* ── Logo area — 64px ───────────────────────────────── */}
             <div className="h-16 flex items-center px-5 flex-shrink-0" style={{ borderBottom: "1px solid var(--color-border)" }}>
-                <Link href="/dashboard" className="flex items-center gap-2.5">
-                    {/* Compass mark — circle + arrow */}
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="9.5" stroke="var(--color-accent)" strokeWidth="1.5" />
-                        {/* Shaft */}
-                        <line x1="9" y1="15" x2="15" y2="9" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="butt" />
-                        {/* Arrowhead — two thin strokes, no fill */}
-                        <line x1="15" y1="9" x2="11" y2="9" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="butt" />
-                        <line x1="15" y1="9" x2="15" y2="13" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="butt" />
-                    </svg>
-                    {/* Wordmark — Syne font, all caps */}
-                    <span
-                        className="text-lg font-bold tracking-widest font-display"
-                        style={{ color: "var(--color-text-primary)", letterSpacing: "0.12em" }}
-                    >
-                        ORYNT
-                    </span>
+                <Link href="/dashboard" className="flex items-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src="/logo.svg"
+                        alt="ORYNT"
+                        style={{ height: "32px", width: "auto" }}
+                    />
                 </Link>
             </div>
 
