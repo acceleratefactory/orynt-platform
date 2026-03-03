@@ -97,23 +97,30 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
                             <CardContent className="space-y-6 px-10 pb-8">
                                 <div className="space-y-2">
                                     <Label htmlFor="org-name" className="text-slate-700 font-bold">Business / Organization name</Label>
-                                    <Input
+                                    <input
                                         id="org-name"
                                         placeholder="e.g. Kemi's Fashion House"
                                         value={orgName}
                                         onChange={(e) => setOrgName(e.target.value)}
                                         required
-                                        className="h-12 bg-slate-50 border-none rounded-2xl focus-visible:ring-primary/20"
+                                        className="w-full h-12 px-4 rounded-2xl text-sm font-medium outline-none transition-shadow"
+                                        style={{ backgroundColor: "#F8FAFC", color: "#1E293B", caretColor: "#00C9A7" }}
+                                        onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 2px rgba(0,201,167,0.35)"}
+                                        onBlur={e => e.currentTarget.style.boxShadow = "none"}
                                     />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="phone" className="text-slate-700 font-bold">Phone number <span className="text-slate-400 font-normal text-xs ml-1">(Optional)</span></Label>
-                                    <Input
+                                    <input
                                         id="phone"
+                                        type="tel"
                                         placeholder="+234 800 000 0000"
                                         value={phone}
                                         onChange={(e) => setPhone(e.target.value)}
-                                        className="h-12 bg-slate-50 border-none rounded-2xl focus-visible:ring-primary/20"
+                                        className="w-full h-12 px-4 rounded-2xl text-sm font-medium outline-none transition-shadow"
+                                        style={{ backgroundColor: "#F8FAFC", color: "#1E293B", caretColor: "#00C9A7" }}
+                                        onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 2px rgba(0,201,167,0.35)"}
+                                        onBlur={e => e.currentTarget.style.boxShadow = "none"}
                                     />
                                 </div>
                             </CardContent>
@@ -140,14 +147,18 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
                             <CardContent className="space-y-6 px-10 pb-8">
                                 <div className="space-y-2">
                                     <Label htmlFor="brand-name" className="text-slate-700 font-bold">Brand name</Label>
-                                    <Input
+                                    <input
                                         id="brand-name"
                                         placeholder="e.g. KemiFashion"
                                         value={brandName}
                                         onChange={(e) => setBrandName(e.target.value)}
                                         required
-                                        className="h-12 bg-slate-50 border-none rounded-2xl focus-visible:ring-primary/20"
+                                        className="w-full h-12 px-4 rounded-2xl text-sm font-medium outline-none transition-shadow"
+                                        style={{ backgroundColor: "#F8FAFC", color: "#1E293B", caretColor: "#00C9A7" }}
+                                        onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 2px rgba(0,201,167,0.35)"}
+                                        onBlur={e => e.currentTarget.style.boxShadow = "none"}
                                     />
+                                </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="category" className="text-slate-700 font-bold">Category</Label>
