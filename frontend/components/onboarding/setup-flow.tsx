@@ -159,7 +159,6 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
                                         onBlur={e => e.currentTarget.style.boxShadow = "none"}
                                     />
                                 </div>
-                                </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="category" className="text-slate-700 font-bold">Category</Label>
                                     <select
