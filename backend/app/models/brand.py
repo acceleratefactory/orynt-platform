@@ -39,6 +39,9 @@ class Brand(Base):
     # Relationships
     organization: Mapped["Organization"] = relationship("Organization", back_populates="brands")
     products: Mapped[list["Product"]] = relationship("Product", back_populates="brand", cascade="all, delete-orphan")
+    integrations: Mapped[list["Integration"]] = relationship("Integration", back_populates="brand", cascade="all, delete-orphan")
+    customers: Mapped[list["Customer"]] = relationship("Customer", back_populates="brand", cascade="all, delete-orphan")
+    orders: Mapped[list["Order"]] = relationship("Order", back_populates="brand", cascade="all, delete-orphan")
 
     def to_dict(self) -> dict:
         return {

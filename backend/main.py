@@ -9,10 +9,12 @@ load_dotenv()  # Load .env before anything else imports os.getenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import health, auth, organizations, brands
+from app.routers import integrations, webhooks
 from app.database import _get_engine
 from app.models.base import Base
 # Import models so SQLAlchemy registers them before create_all
-from app.models import organization, brand, product  # noqa: F401
+from app.models import organization, brand, product                          # noqa: F401
+from app.models import integration, customer, order                          # noqa: F401
 
 app = FastAPI(
     title="ORYNT API",
@@ -46,6 +48,8 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router)
 app.include_router(organizations.router, prefix="/api")
 app.include_router(brands.router, prefix="/api")
+app.include_router(integrations.router)          # prefix already set in router: /api/integrations
+app.include_router(webhooks.router)              # prefix already set in router: /api/webhooks
 
 # ─── Root ────────────────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)

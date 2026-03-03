@@ -11,3 +11,4 @@ redis==5.0.4
 python-dotenv==1.0.1
 pydantic==2.10.6
 pydantic-settings==2.7.0
+cryptography==42.0.8

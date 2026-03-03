@@ -68,3 +68,19 @@ def check_db_connection() -> bool:
         return True
     except (OperationalError, ValueError, Exception):
         return False
+
+
+from contextlib import contextmanager
+
+@contextmanager
+def get_db_session():
+    """Context manager for use in Celery tasks and other non-FastAPI contexts."""
+    SessionLocal = _get_session_factory()
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
