@@ -41,7 +41,30 @@ export default function RootLayout({
             className={`${syne.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}
             style={{ backgroundColor: "#0A0A0F" }}
         >
-            <body className={dmSans.className} style={{ backgroundColor: "#0A0A0F" }}>
+            {/*
+              Anti-flash script: runs synchronously before React hydrates.
+              Reads orynt-theme from localStorage and sets data-theme on <html>
+              so the correct CSS variables are active before first paint.
+            */}
+            <head>
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `
+(function() {
+  try {
+    var saved = localStorage.getItem('orynt-theme');
+    var theme = saved === 'light' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+    if (theme === 'light') {
+      document.documentElement.style.backgroundColor = '#F8F8FA';
+    }
+  } catch(e) {}
+})();
+                        `.trim()
+                    }}
+                />
+            </head>
+            <body className={dmSans.className} style={{ backgroundColor: "transparent" }}>
                 <AuthProvider>
                     {children}
                 </AuthProvider>

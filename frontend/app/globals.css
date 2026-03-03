@@ -104,6 +104,54 @@
   --radius:              0.5rem;
 }
 
+/* ─── Light Theme Overrides ──────────────────────────────────────────────── */
+/* Applied when <html data-theme="light"> — accent stays #00C9A7 in both themes */
+[data-theme="light"] {
+  /* Backgrounds */
+  --color-bg:             #F8F8FA;
+  --color-surface:        #FFFFFF;
+  --color-surface-raised: #F0F0F5;
+  --color-border:         #E2E2EC;
+  --color-border-subtle:  #EBEBF4;
+
+  /* Text */
+  --color-text-primary:   #0A0A0F;
+  --color-text-secondary: #4A4A5A;
+  --color-text-muted:     #8B8B9E;
+  --color-text-inverse:   #F4F4F6;
+
+  /* Accent — unchanged */
+  --color-accent:         #00C9A7;
+  --color-accent-hover:   #00B396;
+  --color-accent-dim:     rgba(0, 201, 167, 0.10);
+  --color-accent-border:  rgba(0, 201, 167, 0.25);
+
+  /* Shadows — lighter on light bg */
+  --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md:     0 2px 8px rgba(0, 0, 0, 0.10);
+  --shadow-lg:     0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-xl:     0 8px 32px rgba(0, 0, 0, 0.16);
+
+  /* shadcn/ui compat — light mode */
+  --background:          240 5% 97%;
+  --foreground:          220 13% 4%;
+  --card:                0 0% 100%;
+  --card-foreground:     220 13% 4%;
+  --popover:             0 0% 100%;
+  --popover-foreground:  220 13% 4%;
+  --primary:             168 100% 40%;
+  --primary-foreground:  220 13% 4%;
+  --secondary:           240 5% 94%;
+  --secondary-foreground:220 13% 4%;
+  --muted:               240 5% 94%;
+  --muted-foreground:    240 4% 45%;
+  --accent:              240 5% 94%;
+  --accent-foreground:   220 13% 4%;
+  --border:              240 6% 90%;
+  --input:               240 6% 90%;
+  --ring:                168 100% 40%;
+}
+
 /* ─── Base Styles ────────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;

@@ -2,6 +2,7 @@
 
 import { Bell, Search } from "lucide-react"
 import { useAuthStore } from "@/store/auth"
+import { ThemeToggle } from "@/components/dashboard/theme-toggle"
 
 export function Header() {
     const { user } = useAuthStore()
@@ -50,6 +51,9 @@ export function Header() {
                 >
                     <Bell className="w-4 h-4" strokeWidth={1.5} />
                 </button>
+
+                {/* Theme toggle */}
+                <ThemeToggle />
 
                 {/* Avatar */}
                 <div
