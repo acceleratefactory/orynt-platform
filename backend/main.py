@@ -19,12 +19,14 @@ from app.routers import gumroad_oauth
 from app.routers import whatsapp_parser
 from app.routers import meta_ads
 from app.routers import google_ads
+from app.routers import social_media
 from app.database import _get_engine
 from app.models.base import Base
 # Import models so SQLAlchemy registers them before create_all
 from app.models import organization, brand, product                          # noqa: F401
 from app.models import integration, customer, order, order_item              # noqa: F401
 from app.models import ad_campaign                                           # noqa: F401
+from app.models import social_metric                                         # noqa: F401
 
 app = FastAPI(
     title="ORYNT API",
@@ -70,6 +72,7 @@ app.include_router(orders.router)                # prefix: /api/orders
 app.include_router(whatsapp_parser.router)       # /api/orders/parse-whatsapp
 app.include_router(meta_ads.router)              # /api/integrations/meta-ads
 app.include_router(google_ads.router)            # /api/integrations/google-ads
+app.include_router(social_media.router)          # /api/integrations/social
 
 # ─── Root ────────────────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)

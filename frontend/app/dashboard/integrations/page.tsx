@@ -861,6 +861,118 @@ function MetaAdsCard({ integration, brandId, onSuccess }: {
     )
 }
 
+// ── Social Media Card ─────────────────────────────────────────────────────────
+
+function SocialMediaCard({ brandId, onSuccess }: { brandId: string; onSuccess: () => void }) {
+    const [status, setStatus] = useState<{
+        connected: boolean; source: string | null; last_sync_at: string | null
+    } | null>(null)
+    const [syncing, setSyncing] = useState(false)
+    const [syncMsg, setSyncMsg] = useState("")
+
+    useEffect(() => {
+        api.get("/api/integrations/social/status", { params: { brand_id: brandId } })
+            .then(r => setStatus(r.data))
+            .catch(() => setStatus({ connected: false, source: null, last_sync_at: null }))
+    }, [brandId])
+
+    const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
+
+    const handleOAuth = () => {
+        window.location.href = `/api/integrations/social/auth?brand_id=${brandId}`
+    }
+
+    const handleSync = async () => {
+        setSyncing(true); setSyncMsg("")
+        try {
+            await api.post(`/api/integrations/social/sync?brand_id=${brandId}`)
+            setSyncMsg("Sync queued — metrics will update in a few minutes.")
+        } catch (e: any) {
+            setSyncMsg(e?.response?.data?.detail || "Sync failed.")
+        } finally { setSyncing(false) }
+    }
+
+    const connected = status?.connected
+
+    // Color theme: Instagram gradient purple-orange
+    const igColor = "#E1306C"
+
+    return (
+        <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: connected ? "rgba(225,48,108,0.12)" : "var(--color-surface-raised)" }}>
+                        <Zap className="w-6 h-6" style={{ color: connected ? igColor : "var(--color-text-muted)" }} />
+                    </div>
+                    <div>
+                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>
+                            Instagram &amp; Facebook Page
+                        </h3>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
+                            Post reach, likes, comments · Page insights
+                        </p>
+                    </div>
+                </div>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
+                    style={connected
+                        ? { backgroundColor: "rgba(225,48,108,0.1)", color: igColor, border: `1px solid rgba(225,48,108,0.3)` }
+                        : { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+                    {connected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {status === null ? "Loading..." : connected ? "Connected" : "Not connected"}
+                </span>
+            </div>
+
+            {/* Auto-connected via Meta Ads */}
+            {connected && status?.source === "meta_ads" && (
+                <div className="mt-4 p-3 rounded-xl text-xs font-body"
+                    style={{ backgroundColor: "rgba(225,48,108,0.06)", border: "1px solid rgba(225,48,108,0.15)", color: igColor }}>
+                    ✅ Using your Meta Ads connection — no separate setup needed.
+                </div>
+            )}
+
+            {/* Last sync */}
+            {connected && (
+                <div className="mt-4 rounded-xl p-3" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                    <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Last synced</p>
+                    <p className="text-sm font-semibold font-body mt-0.5" style={{ color: "var(--color-text-primary)" }}>
+                        {fmt(status?.last_sync_at ?? null)}
+                    </p>
+                </div>
+            )}
+
+            {syncMsg && (
+                <p className="mt-3 text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{syncMsg}</p>
+            )}
+
+            <div className="mt-5 flex gap-3 flex-wrap">
+                {connected ? (
+                    <button onClick={handleSync} disabled={syncing}
+                        className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body disabled:opacity-50"
+                        style={{ backgroundColor: igColor, color: "#fff" }}>
+                        <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+                        {syncing ? "Syncing..." : "Sync Now"}
+                    </button>
+                ) : (
+                    <button onClick={handleOAuth}
+                        className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
+                        style={{ backgroundColor: igColor, color: "#fff" }}>
+                        <ExternalLink className="w-4 h-4" />
+                        Connect Instagram &amp; Facebook →
+                    </button>
+                )}
+                {connected && (
+                    <button onClick={handleOAuth}
+                        className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-semibold font-body"
+                        style={{ border: "1px solid var(--color-border)", color: "var(--color-text-muted)", backgroundColor: "transparent" }}>
+                        Reconnect
+                    </button>
+                )}
+            </div>
+        </div>
+    )
+}
+
 // ── Google Ads Card ───────────────────────────────────────────────────────────
 
 function GoogleAdsCard({ integration, brandId, onSuccess }: {
@@ -1426,6 +1538,13 @@ function IntegrationsInner() {
             <div>
                 <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>Open Banking</h2>
                 {activeBrandId && <MonoBankCard integration={find("mono")} brandId={activeBrandId} onSuccess={load} />}
+            </div>
+
+            <div>
+                <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>Social Media</h2>
+                <div className="space-y-4">
+                    {activeBrandId && <SocialMediaCard brandId={activeBrandId} onSuccess={load} />}
+                </div>
             </div>
 
             <div>
