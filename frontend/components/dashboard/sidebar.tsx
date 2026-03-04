@@ -10,6 +10,7 @@ import {
     Layers,
     Users,
     ShoppingBag,
+    Inbox,
     GitBranch,
     Megaphone,
     Zap,
@@ -21,19 +22,20 @@ import { cn } from "@/lib/utils"
 
 // Definitive nav order from the brand identity document
 const navItems = [
-    { name: "Overview",          icon: LayoutDashboard, href: "/dashboard" },
-    { name: "SKU Intelligence",  icon: Layers,          href: "/dashboard/sku" },
-    { name: "Customers",         icon: Users,           href: "/dashboard/customers" },
-    { name: "Orders",            icon: ShoppingBag,     href: "/dashboard/orders" },
-    { name: "Channels",          icon: GitBranch,       href: "/dashboard/channels" },
-    { name: "Ads & Influencers", icon: Megaphone,       href: "/dashboard/ads" },
-    { name: "Automations",       icon: Zap,             href: "/dashboard/automations" },
-    { name: "Weekly Digest",     icon: Mail,            href: "/dashboard/digest" },
+    { name: "Overview", icon: LayoutDashboard, href: "/dashboard" },
+    { name: "SKU Intelligence", icon: Layers, href: "/dashboard/sku" },
+    { name: "Customers", icon: Users, href: "/dashboard/customers" },
+    { name: "Orders", icon: ShoppingBag, href: "/dashboard/orders" },
+    { name: "Order Inbox", icon: Inbox, href: "/dashboard/inbox" },
+    { name: "Channels", icon: GitBranch, href: "/dashboard/channels" },
+    { name: "Ads & Influencers", icon: Megaphone, href: "/dashboard/ads" },
+    { name: "Automations", icon: Zap, href: "/dashboard/automations" },
+    { name: "Weekly Digest", icon: Mail, href: "/dashboard/digest" },
 ]
 
 const bottomNavItems = [
-    { name: "Integrations", icon: Plug,     href: "/dashboard/integrations" },
-    { name: "Settings",     icon: Settings, href: "/dashboard/settings" },
+    { name: "Integrations", icon: Plug, href: "/dashboard/integrations" },
+    { name: "Settings", icon: Settings, href: "/dashboard/settings" },
 ]
 
 export function Sidebar() {

@@ -16,6 +16,7 @@ from app.routers import preorder_platform
 from app.routers import bumpa
 from app.routers import selar
 from app.routers import gumroad_oauth
+from app.routers import whatsapp_parser
 from app.database import _get_engine
 from app.models.base import Base
 # Import models so SQLAlchemy registers them before create_all
@@ -63,6 +64,7 @@ app.include_router(selar.router)                 # /api/integrations/selar + /ap
 app.include_router(gumroad_oauth.router)         # /api/integrations/gumroad + /api/webhooks/gumroad
 app.include_router(webhooks.router)              # prefix: /api/webhooks
 app.include_router(orders.router)                # prefix: /api/orders
+app.include_router(whatsapp_parser.router)       # /api/orders/parse-whatsapp
 
 # ─── Root ────────────────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)
