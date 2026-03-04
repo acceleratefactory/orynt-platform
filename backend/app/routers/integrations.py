@@ -312,10 +312,6 @@ def connect_woocommerce(
     db: Session = Depends(get_db),
 ):
     """Connect a WooCommerce store via Consumer Key + Consumer Secret."""
-    brand = db.get(Brand, body.brand_id)
-    if not brand:
-        raise HTTPException(status_code=404, detail="Brand not found")
-
     store_url = body.store_url.rstrip("/")
     if not store_url.startswith("http"):
         store_url = f"https://{store_url}"
