@@ -27,6 +27,7 @@ from app.models import organization, brand, product                          # n
 from app.models import integration, customer, order, order_item              # noqa: F401
 from app.models import ad_campaign                                           # noqa: F401
 from app.models import social_metric                                         # noqa: F401
+from app.models import sync_error                                            # noqa: F401
 
 app = FastAPI(
     title="ORYNT API",

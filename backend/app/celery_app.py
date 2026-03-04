@@ -30,6 +30,7 @@ celery_app = Celery(
         "app.tasks.meta_ads_tasks",
         "app.tasks.google_ads_tasks",
         "app.tasks.social_media_tasks",
+        "app.tasks.sync_scheduler",
     ],
 )
 
@@ -81,6 +82,16 @@ celery_app.conf.update(
             "schedule": 60 * 60 * 24,
             "options": {"expires": 3600},
         },
+        "sync-all-integrations": {
+            "task": "app.tasks.sync_scheduler.sync_all_integrations",
+            "schedule": 60 * 60 * 24,
+            "options": {"expires": 3600},
+        },
+        "check-stale-integrations": {
+            "task": "app.tasks.sync_scheduler.check_stale_integrations",
+            "schedule": 60 * 60 * 24,
+            "options": {"expires": 3600},
+        },
     },
     beat_crontab_timezone="Africa/Lagos",
 )
@@ -94,3 +105,5 @@ celery_app.conf.beat_schedule["nightly-gumroad-sync"]["schedule"] = crontab(hour
 celery_app.conf.beat_schedule["nightly-meta-sync"]["schedule"] = crontab(hour=6, minute=0)    # 6AM WAT
 celery_app.conf.beat_schedule["nightly-google-ads-sync"]["schedule"] = crontab(hour=6, minute=30)  # 6:30AM WAT
 celery_app.conf.beat_schedule["nightly-social-sync"]["schedule"] = crontab(hour=7, minute=0)  # 7AM WAT
+celery_app.conf.beat_schedule["sync-all-integrations"]["schedule"] = crontab(hour=2, minute=0)   # 2AM WAT
+celery_app.conf.beat_schedule["check-stale-integrations"]["schedule"] = crontab(hour=3, minute=30)  # 3:30AM WAT
