@@ -604,7 +604,6 @@ function ResellerPlatformCard({ integration, brandId, onSuccess }: {
         </div>
     )
 }
-}
 
 // ── Preorder Platform Card ─────────────────────────────────────────────────────
 
