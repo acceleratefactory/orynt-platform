@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { CheckCircle2, AlertCircle, Plus, RefreshCw, Zap, Building2, ExternalLink, ShoppingBag } from "lucide-react"
+import { CheckCircle2, AlertCircle, Plus, RefreshCw, Zap, Building2, ExternalLink, ShoppingBag, BarChart2 } from "lucide-react"
 import { useAuthStore } from "@/store/auth"
 import api from "@/lib/api"
 import { useSearchParams } from "next/navigation"
@@ -799,6 +799,68 @@ function PreorderPlatformCard({ integration, brandId, onSuccess }: {
     )
 }
 
+// ── Meta Ads Card ─────────────────────────────────────────────────────────────
+
+function MetaAdsCard({ integration, brandId, onSuccess }: {
+    integration: Integration | undefined; brandId: string; onSuccess: () => void
+}) {
+    const connected = integration?.status === "connected"
+    const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
+
+    const handleOAuth = () => {
+        window.location.href = `/api/integrations/meta-ads/auth?brand_id=${brandId}`
+    }
+
+    return (
+        <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: connected ? "rgba(24,119,242,0.12)" : "var(--color-surface-raised)" }}>
+                        <BarChart2 className="w-6 h-6" style={{ color: connected ? "#1877F2" : "var(--color-text-muted)" }} />
+                    </div>
+                    <div>
+                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Meta Ads</h3>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>Facebook &amp; Instagram campaign performance · ROAS</p>
+                    </div>
+                </div>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
+                    style={connected
+                        ? { backgroundColor: "rgba(24,119,242,0.1)", color: "#1877F2", border: "1px solid rgba(24,119,242,0.3)" }
+                        : { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+                    {connected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {connected ? "Connected" : "Not connected"}
+                </span>
+            </div>
+
+            {connected && (
+                <div className="mt-5 grid grid-cols-2 gap-4">
+                    {[
+                        { label: "Last synced", value: fmt(integration!.last_sync_at) },
+                        { label: "Days synced", value: (integration!.transaction_count || 0).toLocaleString() },
+                    ].map(s => (
+                        <div key={s.label} className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                            <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{s.label}</p>
+                            <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>{s.value}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="mt-5">
+                <button onClick={handleOAuth}
+                    className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
+                    style={connected
+                        ? { border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }
+                        : { backgroundColor: "#1877F2", color: "#ffffff" }}>
+                    <ExternalLink className="w-4 h-4" />
+                    {connected ? "Reconnect Meta Ads" : "Connect via Meta Business Login →"}
+                </button>
+            </div>
+        </div>
+    )
+}
+
 // ── Selar Card ────────────────────────────────────────────────────────────────
 
 function SelarCard({ integration, brandId, onSuccess }: {
@@ -1204,6 +1266,13 @@ function IntegrationsInner() {
             <div>
                 <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>Open Banking</h2>
                 {activeBrandId && <MonoBankCard integration={find("mono")} brandId={activeBrandId} onSuccess={load} />}
+            </div>
+
+            <div>
+                <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>Ads</h2>
+                <div className="space-y-4">
+                    {activeBrandId && <MetaAdsCard integration={find("meta_ads")} brandId={activeBrandId} onSuccess={load} />}
+                </div>
             </div>
 
             <div>
