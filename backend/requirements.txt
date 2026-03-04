@@ -12,3 +12,5 @@ python-dotenv==1.0.1
 pydantic==2.10.6
 pydantic-settings==2.7.0
 cryptography==42.0.8
+pymysql==1.1.1
+celery[redis]==5.4.0
