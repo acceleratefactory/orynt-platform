@@ -320,20 +320,48 @@ def connect_woocommerce(
     if not store_url.startswith("http"):
         store_url = f"https://{store_url}"
 
-    try:
-        resp = httpx.get(
-            f"{store_url}/wp-json/wc/v3/orders",
-            params={"consumer_key": body.consumer_key, "consumer_secret": body.consumer_secret, "per_page": 1},
-            timeout=15, verify=False,
-        )
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Could not reach WooCommerce store: {exc}")
+    # Try standard URL first, then fallback for sites with "Plain" permalinks
+    auth_params = {
+        "consumer_key": body.consumer_key,
+        "consumer_secret": body.consumer_secret,
+        "per_page": 1,
+    }
+    candidate_urls = [
+        f"{store_url}/wp-json/wc/v3/orders",
+        f"{store_url}/?rest_route=/wc/v3/orders",
+    ]
+    resp = None
+    for url in candidate_urls:
+        try:
+            resp = httpx.get(url, params=auth_params, timeout=15, verify=False)
+            if resp.status_code in (200, 201):
+                break  # found working URL
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not reach '{store_url}'. Double-check the store URL includes https://.",
+            )
 
-    if resp.status_code not in (200, 201):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid credentials or store URL (HTTP {resp.status_code}). Verify the Consumer Key has Read access.",
-        )
+    status = getattr(resp, "status_code", None)
+    if status not in (200, 201):
+        if status == 404:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "WooCommerce REST API not found (404). "
+                    "Fix: WordPress Admin → Settings → Permalinks → select 'Post name' → Save. Then try again."
+                ),
+            )
+        elif status in (401, 403):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid Consumer Key or Consumer Secret. Make sure the key has Read/Write permissions.",
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"WooCommerce validation failed (HTTP {status}). Check the store URL and credentials.",
+            )
 
     creds_json = json.dumps({
         "store_url": store_url,
