@@ -800,6 +800,170 @@ function PreorderPlatformCard({ integration, brandId, onSuccess }: {
     )
 }
 
+// ── Bumpa Import Card ─────────────────────────────────────────────────────────
+
+function BumpaImportCard({ brandId }: { brandId: string }) {
+    const [dragging, setDragging] = useState(false)
+    const [uploading, setUploading] = useState(false)
+    const [result, setResult] = useState<{
+        orders_imported: number; products_imported: number;
+        customers_imported: number; errors: string[]; total_errors: number
+    } | null>(null)
+    const [uploadError, setUploadError] = useState("")
+    const fileRef = useRef<HTMLInputElement>(null)
+
+    const downloadTemplate = async () => {
+        const link = document.createElement("a")
+        link.href = `/api/integrations/bumpa/template`
+        link.download = "bumpa_import_template.csv"
+        // Pass auth header via fetch then create blob URL
+        try {
+            const token = localStorage.getItem("access_token")
+            const res = await fetch("/api/integrations/bumpa/template", {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            })
+            const blob = await res.blob()
+            link.href = URL.createObjectURL(blob)
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+        } catch {
+            link.click()  // fallback
+        }
+    }
+
+    const handleFile = async (f: File) => {
+        if (!f.name.endsWith(".csv")) {
+            setUploadError("Please upload a .csv file"); return
+        }
+        setUploading(true); setResult(null); setUploadError("")
+        try {
+            const fd = new FormData()
+            fd.append("brand_id", brandId)
+            fd.append("file", f)
+            const res = await api.post("/api/integrations/bumpa/upload", fd, {
+                headers: { "Content-Type": "multipart/form-data" }
+            })
+            setResult(res.data)
+        } catch (err: any) {
+            setUploadError(err?.response?.data?.detail || "Upload failed. Please check your CSV and try again.")
+        } finally { setUploading(false) }
+    }
+
+    const onDrop = (e: React.DragEvent) => {
+        e.preventDefault(); setDragging(false)
+        const f = e.dataTransfer.files[0]
+        if (f) handleFile(f)
+    }
+
+    return (
+        <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+            {/* Header */}
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-sm font-mono"
+                        style={{ backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)" }}>
+                        CSV
+                    </div>
+                    <div>
+                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Import from Bumpa</h3>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
+                            Upload your Bumpa CSV export to import orders, products and customers
+                        </p>
+                    </div>
+                </div>
+                <button onClick={downloadTemplate}
+                    className="flex items-center gap-2 px-4 h-9 rounded-xl text-xs font-semibold font-body flex-shrink-0"
+                    style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>
+                    <ExternalLink className="w-3.5 h-3.5" /> Download Template
+                </button>
+            </div>
+
+            {/* Drag-drop zone */}
+            <div
+                onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+                onClick={() => !uploading && fileRef.current?.click()}
+                className="mt-5 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors"
+                style={{
+                    height: 120,
+                    borderColor: dragging ? "var(--color-accent)" : "var(--color-border)",
+                    backgroundColor: dragging ? "var(--color-accent-dim)" : "var(--color-surface-raised)",
+                }}>
+                <input ref={fileRef} type="file" accept=".csv" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+                {uploading
+                    ? <><RefreshCw className="w-6 h-6 animate-spin" style={{ color: "var(--color-accent)" }} />
+                        <p className="text-sm font-semibold font-body" style={{ color: "var(--color-accent)" }}>Importing...</p></>
+                    : <><ShoppingBag className="w-6 h-6" style={{ color: "var(--color-text-muted)" }} />
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
+                            Drag &amp; drop your CSV here, or <span style={{ color: "var(--color-accent)" }}>click to browse</span>
+                        </p>
+                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Bumpa CSV export format only</p></>
+                }
+            </div>
+
+            {/* Upload error */}
+            {uploadError && (
+                <div className="mt-4 flex items-start gap-2 p-3 rounded-xl text-xs font-body"
+                    style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444" }}>
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />{uploadError}
+                </div>
+            )}
+
+            {/* Import result */}
+            {result && (
+                <div className="mt-4 space-y-3">
+                    {/* Summary stats */}
+                    <div className="grid grid-cols-3 gap-3">
+                        {[
+                            { label: "Orders", value: result.orders_imported },
+                            { label: "Products", value: result.products_imported },
+                            { label: "Customers", value: result.customers_imported },
+                        ].map(s => (
+                            <div key={s.label} className="rounded-xl p-3 text-center" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                                <p className="text-xl font-bold font-display" style={{ color: "var(--color-accent)" }}>{s.value}</p>
+                                <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{s.label} imported</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Errors */}
+                    {result.errors.length > 0 && (
+                        <div className="rounded-xl p-4 space-y-2"
+                            style={{ backgroundColor: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)" }}>
+                            <p className="text-xs font-semibold font-body" style={{ color: "#F59E0B" }}>
+                                {result.total_errors} row{result.total_errors !== 1 ? "s" : ""} had issues (these rows were skipped):
+                            </p>
+                            <div className="space-y-1 max-h-40 overflow-y-auto">
+                                {result.errors.slice(0, 10).map((e, i) => (
+                                    <p key={i} className="text-xs font-mono" style={{ color: "var(--color-text-secondary)" }}>• {e}</p>
+                                ))}
+                                {result.total_errors > 10 && (
+                                    <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>
+                                        ...and {result.total_errors - 10} more. Fix these rows in your CSV and re-upload.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {result.orders_imported > 0 && (
+                        <div className="flex items-center gap-2 p-3 rounded-xl"
+                            style={{ backgroundColor: "var(--color-accent-dim)", border: "1px solid var(--color-accent-border)" }}>
+                            <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: "var(--color-accent)" }} />
+                            <p className="text-sm font-semibold font-body" style={{ color: "var(--color-accent)" }}>
+                                Import complete. Re-uploading the same file will not create duplicates.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    )
+}
+
 // ── Page (inner) ──────────────────────────────────────────────────────────────
 
 
@@ -870,6 +1034,13 @@ function IntegrationsInner() {
             <div>
                 <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>Open Banking</h2>
                 {activeBrandId && <MonoBankCard integration={find("mono")} brandId={activeBrandId} onSuccess={load} />}
+            </div>
+
+            <div>
+                <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>CSV Import</h2>
+                <div className="space-y-4">
+                    {activeBrandId && <BumpaImportCard brandId={activeBrandId} />}
+                </div>
             </div>
 
             {modal && activeBrandId && (

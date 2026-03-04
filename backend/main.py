@@ -13,6 +13,7 @@ from app.routers import integrations, webhooks, orders
 from app.routers import shopify_oauth
 from app.routers import reseller_platform
 from app.routers import preorder_platform
+from app.routers import bumpa
 from app.database import _get_engine
 from app.models.base import Base
 # Import models so SQLAlchemy registers them before create_all
@@ -55,6 +56,7 @@ app.include_router(integrations.router)          # prefix already set in router:
 app.include_router(shopify_oauth.router)         # prefix: /api/integrations/shopify
 app.include_router(reseller_platform.router)     # prefix: /api/integrations/reseller-platform
 app.include_router(preorder_platform.router)     # prefix: /api/integrations/preorder-platform
+app.include_router(bumpa.router)                 # prefix: /api/integrations/bumpa
 app.include_router(webhooks.router)              # prefix: /api/webhooks
 app.include_router(orders.router)                # prefix: /api/orders
 
