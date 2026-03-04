@@ -604,6 +604,201 @@ function ResellerPlatformCard({ integration, brandId, onSuccess }: {
         </div>
     )
 }
+}
+
+// ── Preorder Platform Card ─────────────────────────────────────────────────────
+
+function PreorderPlatformCard({ integration, brandId, onSuccess }: {
+    integration: Integration | undefined; brandId: string; onSuccess: () => void
+}) {
+    const status = integration?.status
+    const connected = status === "connected" || status === "syncing"
+    const pending = status === "pending_confirmation"
+    const fmt = (iso: string | null) => iso
+        ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
+
+    const [step, setStep] = useState<"idle" | "form" | "preview" | "syncing">(
+        connected ? "idle" : pending ? "preview" : "idle"
+    )
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState("")
+    const [preview, setPreview] = useState<{ sellers_found: number; integration_id: string; preview: any[] } | null>(null)
+    const [fields, setFields] = useState({ db_host: "", db_name: "", db_user: "", db_password: "" })
+
+    const handleConnect = async (e: React.FormEvent) => {
+        e.preventDefault(); setLoading(true); setError("")
+        try {
+            const res = await api.post("/api/integrations/preorder-platform/connect", { ...fields, brand_id: brandId })
+            setPreview(res.data); setStep("preview")
+        } catch (err: any) {
+            setError(err?.response?.data?.detail || "Connection failed. Check your database credentials.")
+        } finally { setLoading(false) }
+    }
+
+    const handleConfirm = async () => {
+        if (!preview) return
+        setLoading(true); setError("")
+        try {
+            await api.post("/api/integrations/preorder-platform/confirm", {
+                integration_id: preview.integration_id, brand_id: brandId
+            })
+            setStep("syncing"); onSuccess()
+        } catch (err: any) {
+            setError(err?.response?.data?.detail || "Confirmation failed.")
+        } finally { setLoading(false) }
+    }
+
+    return (
+        <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold font-mono"
+                        style={{ backgroundColor: connected ? "rgba(0,201,167,0.1)" : "var(--color-surface-raised)", color: connected ? "var(--color-accent)" : "var(--color-text-muted)" }}>
+                        PO
+                    </div>
+                    <div>
+                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Preorder Platform</h3>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>
+                            Multi-seller preorder campaigns — direct database ingestion
+                        </p>
+                    </div>
+                </div>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
+                    style={connected
+                        ? { backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)" }
+                        : pending ? { backgroundColor: "rgba(245,158,11,0.1)", color: "#F59E0B", border: "1px solid rgba(245,158,11,0.3)" }
+                            : { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+                    {connected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {connected ? (status === "syncing" ? "Syncing..." : "Connected") : pending ? "Pending Confirmation" : "Not connected"}
+                </span>
+            </div>
+
+            {connected && (
+                <div className="mt-5 grid grid-cols-2 gap-4">
+                    {[
+                        { label: "Last synced", value: fmt(integration!.last_sync_at) },
+                        { label: "Seller brands", value: integration!.transaction_count.toLocaleString() },
+                    ].map(s => (
+                        <div key={s.label} className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                            <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{s.label}</p>
+                            <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>{s.value}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {step === "form" && (
+                <form onSubmit={handleConnect} className="mt-5 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                        {[
+                            { key: "db_host", label: "DB Host", placeholder: "db.example.com or IP", type: "text" },
+                            { key: "db_name", label: "Database Name", placeholder: "preorder_db", type: "text" },
+                            { key: "db_user", label: "DB Username", placeholder: "db_user", type: "text" },
+                            { key: "db_password", label: "DB Password", placeholder: "••••••••", type: "password" },
+                        ].map(f => (
+                            <div key={f.key} className="space-y-1">
+                                <label className="text-xs font-semibold font-body" style={{ color: "var(--color-text-secondary)" }}>{f.label}</label>
+                                <input type={f.type} placeholder={f.placeholder} required
+                                    value={(fields as any)[f.key]}
+                                    onChange={e => setFields(v => ({ ...v, [f.key]: e.target.value }))}
+                                    className="w-full h-10 px-3 rounded-xl text-sm font-mono outline-none"
+                                    style={{ backgroundColor: "var(--color-surface-raised)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
+                                    onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 2px var(--color-accent-border)"}
+                                    onBlur={e => e.currentTarget.style.boxShadow = "none"} />
+                            </div>
+                        ))}
+                    </div>
+                    {error && (
+                        <div className="flex items-start gap-2 p-3 rounded-xl text-xs font-body"
+                            style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444" }}>
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
+                        </div>
+                    )}
+                    <div className="flex gap-3 pt-1">
+                        <button type="button" onClick={() => { setStep("idle"); setError("") }}
+                            className="flex-1 h-10 rounded-xl text-sm font-semibold font-body"
+                            style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>Cancel</button>
+                        <button type="submit" disabled={loading}
+                            className="flex-1 h-10 rounded-xl text-sm font-bold font-body disabled:opacity-60"
+                            style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
+                            {loading ? "Connecting..." : "Test Connection →"}
+                        </button>
+                    </div>
+                </form>
+            )}
+
+            {step === "preview" && preview && (
+                <div className="mt-5 space-y-4">
+                    <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                        <p className="text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>
+                            ✓ Connected — <span style={{ color: "var(--color-accent)" }}>{preview.sellers_found} active sellers</span> found
+                        </p>
+                        {preview.preview?.length > 0 && (
+                            <div className="space-y-1">
+                                <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>Preview (first {preview.preview.length}):</p>
+                                {preview.preview.map((s: any) => (
+                                    <p key={s.id} className="text-xs font-mono" style={{ color: "var(--color-text-secondary)" }}>
+                                        #{s.id} — {s.business_name}
+                                        {s.total_campaigns ? ` | ${s.total_campaigns} campaigns` : ""}
+                                        {s.reliability_score ? ` | ⭐ ${Number(s.reliability_score).toFixed(1)}` : ""}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
+                        <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>
+                            Confirming will create {preview.sellers_found} brands and sync all campaigns, orders, and customers.
+                        </p>
+                    </div>
+                    {error && (
+                        <div className="flex items-start gap-2 p-3 rounded-xl text-xs font-body"
+                            style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444" }}>
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
+                        </div>
+                    )}
+                    <div className="flex gap-3">
+                        <button onClick={() => { setStep("form"); setPreview(null); setError("") }}
+                            className="flex-1 h-10 rounded-xl text-sm font-semibold font-body"
+                            style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>Back</button>
+                        <button onClick={handleConfirm} disabled={loading}
+                            className="flex-1 h-10 rounded-xl text-sm font-bold font-body disabled:opacity-60"
+                            style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
+                            {loading ? "Starting..." : `Confirm — Create ${preview.sellers_found} Brands`}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {step === "syncing" && (
+                <div className="mt-5 flex items-center gap-3 p-4 rounded-xl"
+                    style={{ backgroundColor: "var(--color-accent-dim)", border: "1px solid var(--color-accent-border)" }}>
+                    <RefreshCw className="w-4 h-4 animate-spin" style={{ color: "var(--color-accent)" }} />
+                    <p className="text-sm font-semibold font-body" style={{ color: "var(--color-accent)" }}>
+                        Brand creation in progress — check back in a few minutes.
+                    </p>
+                </div>
+            )}
+
+            {step === "idle" && !connected && (
+                <div className="mt-5">
+                    <button onClick={() => setStep("form")}
+                        className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
+                        style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
+                        <Plus className="w-4 h-4" /> Connect Preorder Platform
+                    </button>
+                </div>
+            )}
+            {step === "idle" && connected && (
+                <div className="mt-5">
+                    <button onClick={() => setStep("form")}
+                        className="flex items-center gap-2 px-4 h-9 rounded-xl text-sm font-semibold font-body"
+                        style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>
+                        <RefreshCw className="w-3.5 h-3.5" /> Re-connect / Update Credentials
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+}
 
 // ── Page (inner) ──────────────────────────────────────────────────────────────
 
@@ -659,6 +854,7 @@ function IntegrationsInner() {
                             config={ECOMMERCE_GATEWAYS[key]} />
                     ))}
                     {activeBrandId && <ResellerPlatformCard integration={find("reseller_platform")} brandId={activeBrandId} onSuccess={load} />}
+                    {activeBrandId && <PreorderPlatformCard integration={find("preorder_platform")} brandId={activeBrandId} onSuccess={load} />}
                 </div>
             </div>
 
