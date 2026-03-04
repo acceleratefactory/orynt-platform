@@ -1,7 +1,7 @@
 """
 ORYNT — Integrations Router
-All payment gateway connect endpoints + Mono Open Banking + list.
-Paystack, Flutterwave, Monnify, OPay, Mono.
+All payment gateway connect endpoints + Mono Open Banking + WooCommerce + list.
+Paystack, Flutterwave, Monnify, OPay, Mono, WooCommerce.
 """
 
 import os
@@ -297,6 +297,82 @@ def mono_exchange(body: MonoExchangeRequest, user: dict = Depends(get_current_us
 
 
 # ── List ──────────────────────────────────────────────────────────────────────
+
+class WooCommerceConnectRequest(BaseModel):
+    store_url: str
+    consumer_key: str
+    consumer_secret: str
+    brand_id: str
+
+
+@router.post("/woocommerce/connect")
+def connect_woocommerce(
+    body: WooCommerceConnectRequest,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Connect a WooCommerce store via Consumer Key + Consumer Secret."""
+    brand = db.get(Brand, body.brand_id)
+    if not brand:
+        raise HTTPException(status_code=404, detail="Brand not found")
+
+    store_url = body.store_url.rstrip("/")
+    if not store_url.startswith("http"):
+        store_url = f"https://{store_url}"
+
+    try:
+        resp = httpx.get(
+            f"{store_url}/wp-json/wc/v3/orders",
+            params={"consumer_key": body.consumer_key, "consumer_secret": body.consumer_secret, "per_page": 1},
+            timeout=15, verify=False,
+        )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach WooCommerce store: {exc}")
+
+    if resp.status_code not in (200, 201):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid credentials or store URL (HTTP {resp.status_code}). Verify the Consumer Key has Read access.",
+        )
+
+    creds_json = json.dumps({
+        "store_url": store_url,
+        "consumer_key": body.consumer_key,
+        "consumer_secret": body.consumer_secret,
+    })
+    integration = _upsert_integration(db, body.brand_id, "woocommerce", _encrypt(creds_json))
+
+    # Auto-register WooCommerce webhooks
+    _register_woocommerce_webhooks(store_url, body.consumer_key, body.consumer_secret)
+
+    try:
+        from app.tasks.woocommerce_tasks import pull_woocommerce_history
+        pull_woocommerce_history.delay(body.brand_id, integration.id)
+    except Exception as exc:
+        logger.warning(f"[WooCommerce] Could not queue task: {exc}")
+
+    return {"status": "connected", "integration_id": integration.id,
+            "message": "WooCommerce connected. Historical sync started in the background."}
+
+
+def _register_woocommerce_webhooks(store_url: str, ck: str, cs: str) -> None:
+    """Register order.created, order.updated, product.updated webhooks."""
+    backend_base = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
+    webhook_secret = cs[:40]
+    for topic in ["order.created", "order.updated", "product.updated"]:
+        try:
+            resp = httpx.post(
+                f"{store_url}/wp-json/wc/v3/webhooks",
+                params={"consumer_key": ck, "consumer_secret": cs},
+                json={"name": f"ORYNT {topic}", "topic": topic,
+                      "delivery_url": f"{backend_base}/api/webhooks/woocommerce",
+                      "secret": webhook_secret, "status": "active"},
+                timeout=10, verify=False,
+            )
+            logger.info(f"[WooCommerce] Webhook {topic}: {resp.status_code}")
+        except Exception as exc:
+            logger.warning(f"[WooCommerce] Webhook {topic} failed: {exc}")
+
 
 @router.get("")
 def list_integrations(brand_id: str, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):

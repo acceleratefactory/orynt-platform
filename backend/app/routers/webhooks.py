@@ -725,3 +725,163 @@ def _shopify_handle_inventory_update(payload: dict, brand_id: str, db: Session):
     logger.info(f"[Shopify Webhook] Inventory update: item={inventory_item_id} available={available}")
     # Best-effort: update all products with matching brand if we stored inv_item_id
     # (Full matching requires storing inv_item_id in product record - future enhancement)
+
+
+# ── WooCommerce Webhook ───────────────────────────────────────────────────────
+
+def _verify_wc_webhook_sig(raw_body: bytes, provided_sig: str, secret: str) -> bool:
+    """WooCommerce uses base64-encoded HMAC-SHA256 with the webhook secret."""
+    if not secret:
+        return True
+    import base64
+    computed = hmac.new(secret.encode(), raw_body, hashlib.sha256).digest()
+    return hmac.compare_digest(base64.b64encode(computed).decode(), provided_sig)
+
+
+def _wc_find_integration(source_url: str, db: Session):
+    """Find a WooCommerce integration by matching the stored store_url."""
+    from app.models.integration import Integration
+    for intg in db.query(Integration).filter_by(type="woocommerce", status="connected").all():
+        raw = _decrypt_integration_key(intg)
+        if raw:
+            try:
+                creds = _json.loads(raw)
+                stored = creds.get("store_url", "").rstrip("/").replace("https://", "").replace("http://", "")
+                src = source_url.rstrip("/").replace("https://", "").replace("http://", "")
+                if stored == src:
+                    return intg, creds
+            except Exception:
+                pass
+    return None, None
+
+
+@router.post("/woocommerce")
+async def woocommerce_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Receive WooCommerce webhook events.
+    Validates X-WC-Webhook-Signature (base64 HMAC-SHA256).
+    Handles: order.created, order.updated, product.updated.
+    Always returns 200.
+    """
+    raw_body = await request.body()
+    provided_sig = request.headers.get("x-wc-webhook-signature", "")
+    topic = request.headers.get("x-wc-webhook-topic", "")
+    source = request.headers.get("x-wc-webhook-source", "")
+
+    try:
+        payload = _json.loads(raw_body) if raw_body else {}
+    except Exception:
+        return {"status": "ok"}
+
+    intg, creds = _wc_find_integration(source, db)
+    if not intg:
+        logger.warning(f"[WC Webhook] No integration found for {source}")
+        return {"status": "ok"}
+
+    webhook_secret = (creds.get("consumer_secret") or "")[:40]
+    if provided_sig and not _verify_wc_webhook_sig(raw_body, provided_sig, webhook_secret):
+        logger.warning(f"[WC Webhook] Invalid signature from {source}")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    brand_id = intg.brand_id
+    logger.info(f"[WC Webhook] topic={topic} brand={brand_id}")
+
+    if topic in ("order.created", "order.updated"):
+        _wc_handle_order(payload, brand_id, db)
+    elif topic == "product.updated":
+        _wc_handle_product(payload, brand_id, db)
+
+    return {"status": "ok"}
+
+
+def _wc_handle_order(order: dict, brand_id: str, db: Session):
+    from app.models.order_item import OrderItem
+    from app.models.product import Product
+
+    external_id = str(order.get("id", ""))
+    if not external_id:
+        return
+
+    status_map = {"processing": "completed", "completed": "completed", "pending": "pending",
+                  "on-hold": "pending", "refunded": "refunded", "cancelled": "failed", "failed": "failed"}
+    status = status_map.get(str(order.get("status", "")).lower(), "pending")
+
+    existing = db.query(Order).filter_by(brand_id=brand_id, external_id=external_id, source="woocommerce").first()
+    if existing:
+        if existing.status != status:
+            existing.status = status
+            db.commit()
+        return
+
+    billing = order.get("billing") or {}
+    email = str(billing.get("email") or "").lower().strip()
+    customer = None
+    if email:
+        customer = _upsert_customer(
+            brand_id, email,
+            f"{billing.get('first_name', '')} {billing.get('last_name', '')}".strip() or None,
+            billing.get("phone"), db,
+        )
+
+    total = round(float(order.get("total") or 0), 2)
+    currency = order.get("currency", "NGN")
+    pm_raw = str(order.get("payment_method_title") or order.get("payment_method") or "other").lower()
+    payment_method = "card" if any(x in pm_raw for x in ("card", "stripe", "paystack")) else "bank_transfer" if "bank" in pm_raw else "cash" if "cash" in pm_raw else "card"
+
+    try:
+        ordered_at = datetime.fromisoformat(str(order.get("date_created", "")).replace("Z", "+00:00")).replace(tzinfo=timezone.utc)
+    except Exception:
+        ordered_at = datetime.now(timezone.utc)
+
+    new_order = Order(
+        brand_id=brand_id, customer_id=customer.id if customer else None,
+        source="woocommerce", channel="website", status=status,
+        total_amount=total,
+        original_amount=total if currency != "NGN" else None,
+        original_currency=currency if currency != "NGN" else None,
+        payment_method=payment_method,
+        payment_gateway=order.get("payment_method") or "woocommerce",
+        external_id=external_id, ordered_at=ordered_at,
+        notes=f"WooCommerce order #{order.get('number', external_id)}",
+    )
+    db.add(new_order)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        return
+
+    for item in (order.get("line_items") or []):
+        ext_pid = str(item.get("product_id") or "")
+        unit_price = round(float(item.get("price") or 0), 2)
+        quantity = int(item.get("quantity") or 1)
+        product = db.query(Product).filter_by(brand_id=brand_id, external_id=ext_pid, source="woocommerce").first() if ext_pid else None
+        oi = OrderItem(
+            order_id=new_order.id, brand_id=brand_id,
+            product_id=product.id if product else None,
+            external_product_id=ext_pid or None,
+            external_variant_id=str(item.get("variation_id") or "") or None,
+            name=str(item.get("name") or "Unknown"),
+            sku=str(item.get("sku") or "") or None,
+            quantity=quantity, unit_price=unit_price,
+            total_price=round(unit_price * quantity, 2),
+        )
+        db.add(oi)
+    db.commit()
+    logger.info(f"[WC Webhook] Created order {external_id}")
+
+
+def _wc_handle_product(product: dict, brand_id: str, db: Session):
+    from app.models.product import Product
+    external_id = str(product.get("id", ""))
+    if not external_id:
+        return
+    selling_price = round(float(product.get("price") or product.get("regular_price") or 0), 2)
+    existing = db.query(Product).filter_by(brand_id=brand_id, external_id=external_id, source="woocommerce").first()
+    if existing:
+        existing.name = product.get("name") or existing.name
+        existing.selling_price = max(selling_price, 0.01)
+        existing.current_stock = int(product.get("stock_quantity") or existing.current_stock or 0)
+        db.commit()
+        logger.info(f"[WC Webhook] Updated product {external_id}")
+

@@ -22,6 +22,7 @@ celery_app = Celery(
         "app.tasks.opay_tasks",
         "app.tasks.mono_tasks",
         "app.tasks.shopify_tasks",
+        "app.tasks.woocommerce_tasks",
     ],
 )
 

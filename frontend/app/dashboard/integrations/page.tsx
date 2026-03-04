@@ -57,14 +57,31 @@ const PAYMENT_GATEWAYS = {
     },
 } as const
 
+const ECOMMERCE_GATEWAYS = {
+    woocommerce: {
+        label: "WooCommerce",
+        description: "E-Commerce — WordPress / WooCommerce stores",
+        endpoint: "/api/integrations/woocommerce/connect",
+        fields: [
+            { name: "store_url", label: "Store URL", placeholder: "https://yourstore.com", type: "text" },
+            { name: "consumer_key", label: "Consumer Key", placeholder: "ck_...", type: "password" },
+            { name: "consumer_secret", label: "Consumer Secret", placeholder: "cs_...", type: "password" },
+        ],
+        hint: "WooCommerce Dashboard → Settings → Advanced → REST API → Add Key (Read/Write)",
+    },
+} as const
+
 type GatewayKey = keyof typeof PAYMENT_GATEWAYS
+type EcommerceKey = keyof typeof ECOMMERCE_GATEWAYS
+
 
 // ── Connect Modal ─────────────────────────────────────────────────────────────
 
-function ConnectModal({ gateway, onClose, onSuccess, brandId }: {
-    gateway: GatewayKey; onClose: () => void; onSuccess: () => void; brandId: string
+function ConnectModal({ gateway, onClose, onSuccess, brandId, config }: {
+    gateway: GatewayKey | EcommerceKey; onClose: () => void; onSuccess: () => void; brandId: string;
+    config?: { label: string; endpoint: string; fields: readonly { name: string; label: string; placeholder: string; type: string }[]; hint: string }
 }) {
-    const meta = PAYMENT_GATEWAYS[gateway]
+    const meta = config ?? PAYMENT_GATEWAYS[gateway as GatewayKey]
     const [values, setValues] = useState<Record<string, string>>({})
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
@@ -328,10 +345,11 @@ function MonoBankCard({ integration, brandId, onSuccess }: {
 
 // ── Gateway Card ──────────────────────────────────────────────────────────────
 
-function GatewayCard({ gatewayKey, integration, onConnect }: {
-    gatewayKey: GatewayKey; integration: Integration | undefined; onConnect: () => void
+function GatewayCard({ gatewayKey, integration, onConnect, config }: {
+    gatewayKey: GatewayKey | EcommerceKey; integration: Integration | undefined; onConnect: () => void;
+    config?: { label: string; description: string }
 }) {
-    const meta = PAYMENT_GATEWAYS[gatewayKey]
+    const meta = config ?? PAYMENT_GATEWAYS[gatewayKey as GatewayKey]
     const connected = integration?.status === "connected"
     const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
     return (
@@ -385,6 +403,7 @@ function IntegrationsInner() {
     const { activeBrandId } = useAuthStore()
     const [integrations, setIntegrations] = useState<Integration[]>([])
     const [modal, setModal] = useState<GatewayKey | null>(null)
+    const [ecomModal, setEcomModal] = useState<EcommerceKey | null>(null)
     const [shopifySuccess, setShopifySuccess] = useState("")
     const searchParams = useSearchParams()
 
@@ -423,7 +442,14 @@ function IntegrationsInner() {
 
             <div>
                 <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>E-Commerce</h2>
-                {activeBrandId && <ShopifyCard integration={find("shopify")} brandId={activeBrandId} onSuccess={load} />}
+                <div className="space-y-4">
+                    {activeBrandId && <ShopifyCard integration={find("shopify")} brandId={activeBrandId} onSuccess={load} />}
+                    {(Object.keys(ECOMMERCE_GATEWAYS) as EcommerceKey[]).map(key => (
+                        <GatewayCard key={key} gatewayKey={key as any} integration={find(key)}
+                            onConnect={() => setEcomModal(key)}
+                            config={ECOMMERCE_GATEWAYS[key]} />
+                    ))}
+                </div>
             </div>
 
             <div>
@@ -442,6 +468,10 @@ function IntegrationsInner() {
 
             {modal && activeBrandId && (
                 <ConnectModal gateway={modal} brandId={activeBrandId} onClose={() => setModal(null)} onSuccess={load} />
+            )}
+            {ecomModal && activeBrandId && (
+                <ConnectModal gateway={ecomModal} brandId={activeBrandId} onClose={() => setEcomModal(null)} onSuccess={load}
+                    config={ECOMMERCE_GATEWAYS[ecomModal]} />
             )}
         </div>
     )
