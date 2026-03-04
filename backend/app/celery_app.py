@@ -28,6 +28,7 @@ celery_app = Celery(
         "app.tasks.selar_tasks",
         "app.tasks.gumroad_tasks",
         "app.tasks.meta_ads_tasks",
+        "app.tasks.google_ads_tasks",
     ],
 )
 
@@ -69,6 +70,11 @@ celery_app.conf.update(
             "schedule": 60 * 60 * 24,
             "options": {"expires": 3600},
         },
+        "nightly-google-ads-sync": {
+            "task": "app.tasks.google_ads_tasks.nightly_google_ads_sync",
+            "schedule": 60 * 60 * 24,
+            "options": {"expires": 3600},
+        },
     },
     beat_crontab_timezone="Africa/Lagos",
 )
@@ -80,3 +86,4 @@ celery_app.conf.beat_schedule["nightly-preorder-sync"]["schedule"] = crontab(hou
 celery_app.conf.beat_schedule["nightly-selar-sync"]["schedule"] = crontab(hour=2, minute=0)
 celery_app.conf.beat_schedule["nightly-gumroad-sync"]["schedule"] = crontab(hour=2, minute=0)
 celery_app.conf.beat_schedule["nightly-meta-sync"]["schedule"] = crontab(hour=6, minute=0)  # 6AM WAT
+celery_app.conf.beat_schedule["nightly-google-ads-sync"]["schedule"] = crontab(hour=6, minute=30)  # 6:30AM WAT

@@ -18,6 +18,7 @@ from app.routers import selar
 from app.routers import gumroad_oauth
 from app.routers import whatsapp_parser
 from app.routers import meta_ads
+from app.routers import google_ads
 from app.database import _get_engine
 from app.models.base import Base
 # Import models so SQLAlchemy registers them before create_all
@@ -68,6 +69,7 @@ app.include_router(webhooks.router)              # prefix: /api/webhooks
 app.include_router(orders.router)                # prefix: /api/orders
 app.include_router(whatsapp_parser.router)       # /api/orders/parse-whatsapp
 app.include_router(meta_ads.router)              # /api/integrations/meta-ads
+app.include_router(google_ads.router)            # /api/integrations/google-ads
 
 # ─── Root ────────────────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)

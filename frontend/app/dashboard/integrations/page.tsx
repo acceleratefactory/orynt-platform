@@ -861,6 +861,166 @@ function MetaAdsCard({ integration, brandId, onSuccess }: {
     )
 }
 
+// ── Google Ads Card ───────────────────────────────────────────────────────────
+
+function GoogleAdsCard({ integration, brandId, onSuccess }: {
+    integration: Integration | undefined; brandId: string; onSuccess: () => void
+}) {
+    const searchParams = useSearchParams()
+    const status = integration?.status
+    const connected = status === "connected"
+    const pendingId = status === "pending_customer_id"
+    const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
+
+    // Show Customer ID form if just returned from OAuth or still pending
+    const showCidForm = pendingId ||
+        (searchParams.get("google_ads") === "enter_customer_id" &&
+            searchParams.get("brand_id") === brandId)
+
+    const [customerId, setCustomerId] = useState("")
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState("")
+    const [done, setDone] = useState(false)
+
+    // Auto-format as user types: 1234567890 → 123-456-7890
+    const handleCidChange = (raw: string) => {
+        const digits = raw.replace(/\D/g, "").slice(0, 10)
+        let fmt = digits
+        if (digits.length > 6) fmt = `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
+        else if (digits.length > 3) fmt = `${digits.slice(0, 3)}-${digits.slice(3)}`
+        setCustomerId(fmt)
+    }
+
+    const handleSaveCustomerId = async (e: React.FormEvent) => {
+        e.preventDefault()
+        const digits = customerId.replace(/\D/g, "")
+        if (digits.length !== 10) { setError("Customer ID must be exactly 10 digits."); return }
+        setLoading(true); setError("")
+        try {
+            await api.post("/api/integrations/google-ads/customer", {
+                brand_id: brandId,
+                customer_id: customerId,
+            })
+            setDone(true); onSuccess()
+        } catch (e: any) {
+            setError(e?.response?.data?.detail || "Failed to save Customer ID. Try again.")
+        } finally { setLoading(false) }
+    }
+
+    const handleOAuth = () => {
+        window.location.href = `/api/integrations/google-ads/auth?brand_id=${brandId}`
+    }
+
+    return (
+        <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-sm"
+                        style={{ backgroundColor: connected ? "rgba(66,133,244,0.12)" : "var(--color-surface-raised)", color: connected ? "#4285F4" : "var(--color-text-muted)" }}>
+                        G
+                    </div>
+                    <div>
+                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Google Ads</h3>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>Search &amp; Display campaign performance · ROAS</p>
+                    </div>
+                </div>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
+                    style={connected
+                        ? { backgroundColor: "rgba(66,133,244,0.1)", color: "#4285F4", border: "1px solid rgba(66,133,244,0.3)" }
+                        : pendingId
+                            ? { backgroundColor: "rgba(251,188,5,0.12)", color: "#FBBC05", border: "1px solid rgba(251,188,5,0.3)" }
+                            : { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+                    {connected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {connected ? "Connected" : pendingId ? "Enter Customer ID" : "Not connected"}
+                </span>
+            </div>
+
+            {/* Connected stats */}
+            {connected && (
+                <div className="mt-5 grid grid-cols-2 gap-4">
+                    {[
+                        { label: "Last synced", value: fmt(integration!.last_sync_at) },
+                        { label: "Days synced", value: (integration!.transaction_count || 0).toLocaleString() },
+                    ].map(s => (
+                        <div key={s.label} className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                            <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{s.label}</p>
+                            <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>{s.value}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Step 2: Customer ID form */}
+            {(showCidForm || done === false && pendingId) && !connected && (
+                <form onSubmit={handleSaveCustomerId} className="mt-5 space-y-3">
+                    <div className="p-3 rounded-xl text-xs font-body"
+                        style={{ backgroundColor: "rgba(251,188,5,0.08)", border: "1px solid rgba(251,188,5,0.2)", color: "#b45309" }}>
+                        ✅ Google authorization complete! Now enter your Ads Customer ID to finish setup.
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-semibold font-body" style={{ color: "var(--color-text-secondary)" }}>
+                            Customer ID
+                            <span className="font-normal ml-1" style={{ color: "var(--color-text-muted)" }}>
+                                (found in your Google Ads account → top right corner)
+                            </span>
+                        </label>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="XXX-XXX-XXXX"
+                            value={customerId}
+                            onChange={e => handleCidChange(e.target.value)}
+                            className="w-full h-12 px-4 rounded-xl text-base font-mono outline-none"
+                            style={{
+                                backgroundColor: "var(--color-surface-raised)",
+                                border: "1.5px solid var(--color-border)",
+                                color: "var(--color-text-primary)", fontSize: "16px",
+                                letterSpacing: "0.05em",
+                            }}
+                            onFocus={e => (e.currentTarget.style.borderColor = "#4285F4")}
+                            onBlur={e => (e.currentTarget.style.borderColor = "var(--color-border)")}
+                        />
+                    </div>
+                    {error && (
+                        <div className="flex items-start gap-2 p-3 rounded-xl text-xs font-body"
+                            style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444" }}>
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
+                        </div>
+                    )}
+                    <button type="submit" disabled={loading || customerId.replace(/\D/g, "").length !== 10}
+                        className="w-full h-11 rounded-xl text-sm font-bold font-body disabled:opacity-50 flex items-center justify-center gap-2"
+                        style={{ backgroundColor: "#4285F4", color: "#fff" }}>
+                        {loading ? "Saving..." : "Save & Start Syncing →"}
+                    </button>
+                </form>
+            )}
+
+            {/* Step 1: OAuth button */}
+            {!showCidForm && !connected && (
+                <div className="mt-5">
+                    <button onClick={handleOAuth}
+                        className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
+                        style={{ backgroundColor: "#4285F4", color: "#fff" }}>
+                        <ExternalLink className="w-4 h-4" />
+                        Connect via Google →
+                    </button>
+                </div>
+            )}
+
+            {/* Reconnect when already connected */}
+            {connected && (
+                <div className="mt-5">
+                    <button onClick={handleOAuth}
+                        className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-semibold font-body"
+                        style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>
+                        <RefreshCw className="w-3.5 h-3.5" /> Reconnect Google Ads
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+}
+
 // ── Selar Card ────────────────────────────────────────────────────────────────
 
 function SelarCard({ integration, brandId, onSuccess }: {
@@ -1272,6 +1432,7 @@ function IntegrationsInner() {
                 <h2 className="text-xs font-bold uppercase tracking-widest mb-4 font-body" style={{ color: "var(--color-text-muted)" }}>Ads</h2>
                 <div className="space-y-4">
                     {activeBrandId && <MetaAdsCard integration={find("meta_ads")} brandId={activeBrandId} onSuccess={load} />}
+                    {activeBrandId && <GoogleAdsCard integration={find("google_ads")} brandId={activeBrandId} onSuccess={load} />}
                 </div>
             </div>
 
