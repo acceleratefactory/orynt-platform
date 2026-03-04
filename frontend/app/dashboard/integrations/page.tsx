@@ -799,6 +799,175 @@ function PreorderPlatformCard({ integration, brandId, onSuccess }: {
     )
 }
 
+// ── Selar Card ────────────────────────────────────────────────────────────────
+
+function SelarCard({ integration, brandId, onSuccess }: {
+    integration: Integration | undefined; brandId: string; onSuccess: () => void
+}) {
+    const status = integration?.status
+    const connected = status === "connected"
+    const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
+    const [showForm, setShowForm] = useState(false)
+    const [apiKey, setApiKey] = useState("")
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState("")
+
+    const handleConnect = async (e: React.FormEvent) => {
+        e.preventDefault(); setLoading(true); setError("")
+        try {
+            await api.post("/api/integrations/selar/connect", { api_key: apiKey, brand_id: brandId })
+            setShowForm(false); setApiKey(""); onSuccess()
+        } catch (err: any) {
+            setError(err?.response?.data?.detail || "Connection failed. Check your API key.")
+        } finally { setLoading(false) }
+    }
+
+    return (
+        <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-sm font-mono"
+                        style={{ backgroundColor: connected ? "rgba(0,201,167,0.1)" : "var(--color-surface-raised)", color: connected ? "var(--color-accent)" : "var(--color-text-muted)" }}>
+                        SLR
+                    </div>
+                    <div>
+                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Selar</h3>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>Digital products — ebooks, courses, templates (is_digital = true)</p>
+                    </div>
+                </div>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
+                    style={connected
+                        ? { backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-accent-border)" }
+                        : { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+                    {connected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {connected ? "Connected" : "Not connected"}
+                </span>
+            </div>
+
+            {connected && (
+                <div className="mt-5 grid grid-cols-2 gap-4">
+                    {[
+                        { label: "Last synced", value: fmt(integration!.last_sync_at) },
+                        { label: "Orders synced", value: (integration!.transaction_count || 0).toLocaleString() },
+                    ].map(s => (
+                        <div key={s.label} className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                            <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{s.label}</p>
+                            <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>{s.value}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {showForm && (
+                <form onSubmit={handleConnect} className="mt-5 space-y-3">
+                    <div className="space-y-1">
+                        <label className="text-xs font-semibold font-body" style={{ color: "var(--color-text-secondary)" }}>
+                            Selar API Key <span className="font-normal text-xs" style={{ color: "var(--color-text-muted)" }}>(Settings → API Keys in your Selar dashboard)</span>
+                        </label>
+                        <input type="password" required placeholder="sk_live_..." value={apiKey}
+                            onChange={e => setApiKey(e.target.value)}
+                            className="w-full h-10 px-3 rounded-xl text-sm font-mono outline-none"
+                            style={{ backgroundColor: "var(--color-surface-raised)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
+                            onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 2px var(--color-accent-border)"}
+                            onBlur={e => e.currentTarget.style.boxShadow = "none"} />
+                    </div>
+                    {error && (
+                        <div className="flex items-start gap-2 p-3 rounded-xl text-xs font-body"
+                            style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444" }}>
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
+                        </div>
+                    )}
+                    <div className="flex gap-3 pt-1">
+                        <button type="button" onClick={() => { setShowForm(false); setError("") }}
+                            className="flex-1 h-10 rounded-xl text-sm font-semibold font-body"
+                            style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }}>Cancel</button>
+                        <button type="submit" disabled={loading}
+                            className="flex-1 h-10 rounded-xl text-sm font-bold font-body disabled:opacity-60"
+                            style={{ backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
+                            {loading ? "Connecting..." : "Connect Selar →"}
+                        </button>
+                    </div>
+                </form>
+            )}
+
+            {!showForm && (
+                <div className="mt-5">
+                    <button onClick={() => setShowForm(true)}
+                        className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
+                        style={connected
+                            ? { border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }
+                            : { backgroundColor: "var(--color-accent)", color: "#0A0A0F" }}>
+                        {connected ? <><RefreshCw className="w-3.5 h-3.5" /> Reconnect</> : <><Plus className="w-4 h-4" /> Connect Selar</>}
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// ── Gumroad Card ──────────────────────────────────────────────────────────────
+
+function GumroadCard({ integration, brandId, onSuccess }: {
+    integration: Integration | undefined; brandId: string; onSuccess: () => void
+}) {
+    const status = integration?.status
+    const connected = status === "connected"
+    const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "Never"
+
+    const handleOAuth = () => {
+        window.location.href = `/api/integrations/gumroad/auth?brand_id=${brandId}`
+    }
+
+    return (
+        <div className="rounded-2xl p-6" style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xs font-mono"
+                        style={{ backgroundColor: connected ? "rgba(255,144,232,0.15)" : "var(--color-surface-raised)", color: connected ? "#ff90e8" : "var(--color-text-muted)" }}>
+                        GUM
+                    </div>
+                    <div>
+                        <h3 className="font-bold font-display" style={{ color: "var(--color-text-primary)" }}>Gumroad</h3>
+                        <p className="text-sm font-body" style={{ color: "var(--color-text-muted)" }}>Digital products via OAuth — is_digital = true</p>
+                    </div>
+                </div>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-body"
+                    style={connected
+                        ? { backgroundColor: "rgba(255,144,232,0.1)", color: "#ff90e8", border: "1px solid rgba(255,144,232,0.3)" }
+                        : { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
+                    {connected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {connected ? "Connected" : "Not connected"}
+                </span>
+            </div>
+
+            {connected && (
+                <div className="mt-5 grid grid-cols-2 gap-4">
+                    {[
+                        { label: "Last synced", value: fmt(integration!.last_sync_at) },
+                        { label: "Sales synced", value: (integration!.transaction_count || 0).toLocaleString() },
+                    ].map(s => (
+                        <div key={s.label} className="rounded-xl p-4" style={{ backgroundColor: "var(--color-surface-raised)" }}>
+                            <p className="text-xs font-body" style={{ color: "var(--color-text-muted)" }}>{s.label}</p>
+                            <p className="mt-1 text-sm font-semibold font-body" style={{ color: "var(--color-text-primary)" }}>{s.value}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="mt-5">
+                <button onClick={handleOAuth}
+                    className="flex items-center gap-2 px-5 h-9 rounded-xl text-sm font-bold font-body"
+                    style={connected
+                        ? { border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", backgroundColor: "transparent" }
+                        : { backgroundColor: "#ff90e8", color: "#1a0020" }}>
+                    <ExternalLink className="w-4 h-4" />
+                    {connected ? "Reconnect via Gumroad" : "Connect via Gumroad OAuth →"}
+                </button>
+            </div>
+        </div>
+    )
+}
+
 // ── Bumpa Import Card ─────────────────────────────────────────────────────────
 
 function BumpaImportCard({ brandId }: { brandId: string }) {
@@ -1018,6 +1187,8 @@ function IntegrationsInner() {
                     ))}
                     {activeBrandId && <ResellerPlatformCard integration={find("reseller_platform")} brandId={activeBrandId} onSuccess={load} />}
                     {activeBrandId && <PreorderPlatformCard integration={find("preorder_platform")} brandId={activeBrandId} onSuccess={load} />}
+                    {activeBrandId && <SelarCard integration={find("selar")} brandId={activeBrandId} onSuccess={load} />}
+                    {activeBrandId && <GumroadCard integration={find("gumroad")} brandId={activeBrandId} onSuccess={load} />}
                 </div>
             </div>
 

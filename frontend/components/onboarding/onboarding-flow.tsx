@@ -47,6 +47,44 @@ const emptyProduct = (): ProductRow => ({
     name: "", selling_price: "", cost_price: "", current_stock: "0", sku_code: ""
 })
 
+// ── Selar inline connect widget ────────────────────────────────────────────────
+function SelarOnboardingConnect({ brandId }: { brandId: string }) {
+    const [key, setKey] = useState("")
+    const [loading, setLoading] = useState(false)
+    const [done, setDone] = useState(false)
+    const [err, setErr] = useState("")
+    const handleConnect = async () => {
+        if (!key.trim()) return
+        setLoading(true); setErr("")
+        try {
+            await api.post("/api/integrations/selar/connect", { api_key: key, brand_id: brandId })
+            setDone(true)
+        } catch (e: any) {
+            setErr(e?.response?.data?.detail || "Connection failed")
+        } finally { setLoading(false) }
+    }
+    if (done) return (
+        <p className="text-sm font-semibold text-green-600 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" /> Selar connected! Products syncing in background.
+        </p>
+    )
+    return (
+        <div className="space-y-2">
+            <input
+                type="password" placeholder="Paste your Selar API key"
+                value={key} onChange={e => setKey(e.target.value)}
+                className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-mono"
+                style={{ backgroundColor: "#FFFFFF", color: "#1E293B" }}
+            />
+            {err && <p className="text-red-500 text-xs">{err}</p>}
+            <button onClick={handleConnect} disabled={loading || !key.trim()}
+                className="w-full h-10 bg-primary text-white rounded-xl text-sm font-bold disabled:opacity-40">
+                {loading ? "Connecting..." : "Connect Selar"}
+            </button>
+        </div>
+    )
+}
+
 export function OnboardingFlow({ brandId, brandName, onComplete }: OnboardingFlowProps) {
     const router = useRouter()
     const [step, setStep] = useState(1)
@@ -263,82 +301,122 @@ export function OnboardingFlow({ brandId, brandName, onComplete }: OnboardingFlo
                 {step === 3 && needsProductCatalog && (
                     <div className="space-y-4">
                         <div>
-                            <h2 className="text-lg font-bold text-slate-900 mb-1">Add your product catalog</h2>
+                            <h2 className="text-lg font-bold text-slate-900 mb-1">
+                                {isDigital ? "Connect your digital platform" : "Add your product catalog"}
+                            </h2>
                             <p className="text-slate-500 text-sm">
-                                {isDigital ? "Add your digital products — they'll be marked as digital automatically." : "Add your products so ORYNT can score them for you."}
+                                {isDigital
+                                    ? "Connect Selar or Gumroad to import your products and sales automatically."
+                                    : "Add your products so ORYNT can score them for you."}
                             </p>
                         </div>
 
-                        {/* Mode toggle */}
-                        <div className="flex gap-2 bg-slate-50 p-1 rounded-2xl">
-                            <button onClick={() => setCsvMode(false)} className={cn("flex-1 py-2 text-sm font-bold rounded-xl transition-all", !csvMode ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>
-                                Manual Entry
-                            </button>
-                            <button onClick={() => setCsvMode(true)} className={cn("flex-1 py-2 text-sm font-bold rounded-xl transition-all", csvMode ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>
-                                Upload CSV
-                            </button>
-                        </div>
-
-                        {!csvMode ? (
-                            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                                {products.map((p, i) => (
-                                    <div key={i} className="bg-slate-50 rounded-2xl p-4 space-y-3">
-                                        <div className="flex gap-2">
-                                            <input
-                                                className="flex-1 h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                                style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }}
-                                                placeholder="Product name *"
-                                                value={p.name}
-                                                onChange={e => updateProduct(i, "name", e.target.value)}
-                                            />
-                                            {products.length > 1 && (
-                                                <button onClick={() => setProducts(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500 p-2 rounded-xl transition-colors">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }} placeholder="Selling price *" value={p.selling_price} onChange={e => updateProduct(i, "selling_price", e.target.value)} />
-                                            <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }} placeholder="Cost price" value={p.cost_price} onChange={e => updateProduct(i, "cost_price", e.target.value)} />
-                                            {!isDigital && <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }} placeholder="Stock qty" value={p.current_stock} onChange={e => updateProduct(i, "current_stock", e.target.value)} />}
-                                        </div>
-                                    </div>
-                                ))}
-                                <button onClick={() => setProducts(prev => [...prev, emptyProduct()])} className="w-full h-10 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-primary/30 hover:text-primary transition-all text-sm font-semibold flex items-center justify-center gap-2">
-                                    <Plus className="w-4 h-4" /> Add another product
-                                </button>
-                            </div>
-                        ) : (
+                        {/* Digital seller: platform connection */}
+                        {isDigital && (
                             <div className="space-y-3">
-                                <a
-                                    href="/csv-template.csv"
-                                    download
-                                    className="text-primary text-sm font-semibold underline underline-offset-2"
-                                >
-                                    Download CSV template
-                                </a>
-                                <div
-                                    onClick={() => fileRef.current?.click()}
-                                    className={cn("border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors", csvFile ? "border-primary/40 bg-primary/5" : "border-slate-200 hover:border-primary/20")}
-                                >
-                                    <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                                    <p className="text-sm font-semibold text-slate-600">{csvFile ? csvFile.name : "Click to upload your CSV file"}</p>
-                                    <p className="text-xs text-slate-400 mt-1">Columns: name, selling_price, cost_price, current_stock, sku_code</p>
+                                {/* Selar */}
+                                <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                                    <p className="font-bold text-slate-800 text-sm">Connect Selar</p>
+                                    <SelarOnboardingConnect brandId={brandId} />
                                 </div>
-                                <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={e => setCsvFile(e.target.files?.[0] ?? null)} />
+                                {/* Gumroad */}
+                                <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
+                                    <p className="font-bold text-slate-800 text-sm">Connect Gumroad</p>
+                                    <button
+                                        onClick={() => window.location.href = `/api/integrations/gumroad/auth?brand_id=${brandId}`}
+                                        className="w-full h-10 rounded-xl text-sm font-bold text-white transition-all"
+                                        style={{ backgroundColor: "#ff90e8" }}>
+                                        Connect via Gumroad OAuth →
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={() => setStep(4)}
+                                    className="w-full h-10 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-slate-300 text-sm font-semibold">
+                                    Skip — I'll connect later
+                                </button>
+                                <div className="flex gap-3 pt-2">
+                                    <button onClick={() => setStep(2)} className="flex items-center gap-2 px-5 h-12 rounded-2xl border-2 border-slate-100 text-slate-600 font-bold hover:border-slate-200 transition-all">
+                                        <ArrowLeft className="w-4 h-4" /> Back
+                                    </button>
+                                </div>
                             </div>
                         )}
 
-                        <div className="flex gap-3">
-                            <button onClick={() => setStep(2)} className="flex items-center gap-2 px-5 h-12 rounded-2xl border-2 border-slate-100 text-slate-600 font-bold hover:border-slate-200 transition-all">
-                                <ArrowLeft className="w-4 h-4" /> Back
-                            </button>
-                            <button onClick={handleStep3Next} disabled={loading} className="flex-1 h-12 bg-primary text-white font-bold rounded-2xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
-                                {loading ? "Saving..." : "Continue"} <ArrowRight className="w-4 h-4" />
-                            </button>
-                        </div>
+                        {/* Non-digital: product catalog (shown below) */}
+                        {!isDigital && <div>
+                            {/* Mode toggle */}
+                            <div className="flex gap-2 bg-slate-50 p-1 rounded-2xl">
+                                <button onClick={() => setCsvMode(false)} className={cn("flex-1 py-2 text-sm font-bold rounded-xl transition-all", !csvMode ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>
+                                    Manual Entry
+                                </button>
+                                <button onClick={() => setCsvMode(true)} className={cn("flex-1 py-2 text-sm font-bold rounded-xl transition-all", csvMode ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>
+                                    Upload CSV
+                                </button>
+                            </div>
+
+                            {!csvMode ? (
+                                <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                                    {products.map((p, i) => (
+                                        <div key={i} className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                                            <div className="flex gap-2">
+                                                <input
+                                                    className="flex-1 h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                                    style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }}
+                                                    placeholder="Product name *"
+                                                    value={p.name}
+                                                    onChange={e => updateProduct(i, "name", e.target.value)}
+                                                />
+                                                {products.length > 1 && (
+                                                    <button onClick={() => setProducts(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500 p-2 rounded-xl transition-colors">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }} placeholder="Selling price *" value={p.selling_price} onChange={e => updateProduct(i, "selling_price", e.target.value)} />
+                                                <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }} placeholder="Cost price" value={p.cost_price} onChange={e => updateProduct(i, "cost_price", e.target.value)} />
+                                                {!isDigital && <input className="h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" style={{ backgroundColor: "#FFFFFF", color: "#1E293B", caretColor: "#00C9A7" }} placeholder="Stock qty" value={p.current_stock} onChange={e => updateProduct(i, "current_stock", e.target.value)} />}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => setProducts(prev => [...prev, emptyProduct()])} className="w-full h-10 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-primary/30 hover:text-primary transition-all text-sm font-semibold flex items-center justify-center gap-2">
+                                        <Plus className="w-4 h-4" /> Add another product
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <a
+                                        href="/csv-template.csv"
+                                        download
+                                        className="text-primary text-sm font-semibold underline underline-offset-2"
+                                    >
+                                        Download CSV template
+                                    </a>
+                                    <div
+                                        onClick={() => fileRef.current?.click()}
+                                        className={cn("border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors", csvFile ? "border-primary/40 bg-primary/5" : "border-slate-200 hover:border-primary/20")}
+                                    >
+                                        <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                                        <p className="text-sm font-semibold text-slate-600">{csvFile ? csvFile.name : "Click to upload your CSV file"}</p>
+                                        <p className="text-xs text-slate-400 mt-1">Columns: name, selling_price, cost_price, current_stock, sku_code</p>
+                                    </div>
+                                    <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={e => setCsvFile(e.target.files?.[0] ?? null)} />
+                                </div>
+                            )}
+
+                            <div className="flex gap-3">
+                                <button onClick={() => setStep(2)} className="flex items-center gap-2 px-5 h-12 rounded-2xl border-2 border-slate-100 text-slate-600 font-bold hover:border-slate-200 transition-all">
+                                    <ArrowLeft className="w-4 h-4" /> Back
+                                </button>
+                                <button onClick={handleStep3Next} disabled={loading} className="flex-1 h-12 bg-primary text-white font-bold rounded-2xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
+                                    {loading ? "Saving..." : "Continue"} <ArrowRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>}
                     </div>
                 )}
+
+
 
                 {/* ── STEP 4: Social & Ads (optional) ────────────────── */}
                 {step === 4 && (

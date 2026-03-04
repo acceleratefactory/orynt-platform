@@ -25,6 +25,8 @@ celery_app = Celery(
         "app.tasks.woocommerce_tasks",
         "app.tasks.reseller_tasks",
         "app.tasks.preorder_tasks",
+        "app.tasks.selar_tasks",
+        "app.tasks.gumroad_tasks",
     ],
 )
 
@@ -51,6 +53,16 @@ celery_app.conf.update(
             "schedule": 60 * 60 * 24,
             "options": {"expires": 3600},
         },
+        "nightly-selar-sync": {
+            "task": "app.tasks.selar_tasks.nightly_selar_sync",
+            "schedule": 60 * 60 * 24,
+            "options": {"expires": 3600},
+        },
+        "nightly-gumroad-sync": {
+            "task": "app.tasks.gumroad_tasks.nightly_gumroad_sync",
+            "schedule": 60 * 60 * 24,
+            "options": {"expires": 3600},
+        },
     },
     beat_crontab_timezone="Africa/Lagos",
 )
@@ -59,3 +71,5 @@ celery_app.conf.update(
 from celery.schedules import crontab  # noqa: E402
 celery_app.conf.beat_schedule["nightly-reseller-sync"]["schedule"] = crontab(hour=2, minute=0)
 celery_app.conf.beat_schedule["nightly-preorder-sync"]["schedule"] = crontab(hour=2, minute=0)
+celery_app.conf.beat_schedule["nightly-selar-sync"]["schedule"] = crontab(hour=2, minute=0)
+celery_app.conf.beat_schedule["nightly-gumroad-sync"]["schedule"] = crontab(hour=2, minute=0)
