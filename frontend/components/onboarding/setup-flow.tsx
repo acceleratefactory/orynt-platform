@@ -1,10 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -34,7 +32,6 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
     const [category, setCategory] = useState("")
     const [loading, setLoading] = useState(false)
     const { toast } = useToast()
-    const router = useRouter()
 
     const handleOrgSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -42,11 +39,11 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
         try {
             await api.post("/api/organizations", { name: orgName, owner_phone: phone })
             setStep(2)
-        } catch (err: any) {
+        } catch {
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: err?.response?.data?.detail || "Failed to create organization.",
+                description: "Failed to create organization.",
             })
         } finally {
             setLoading(false)
@@ -64,11 +61,11 @@ export function SetupFlow({ onComplete, skipToStep }: SetupFlowProps) {
             await api.post("/api/brands", { name: brandName, category })
             toast({ title: "Brand created!", description: `${brandName} is ready.` })
             onComplete()
-        } catch (err: any) {
+        } catch {
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: err?.response?.data?.detail || "Failed to create brand.",
+                description: "Failed to create brand.",
             })
         } finally {
             setLoading(false)

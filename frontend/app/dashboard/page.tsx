@@ -51,13 +51,13 @@ export default function DashboardPage() {
             setActiveBrand(target)
 
             setState(!target.onboarding_completed ? "onboarding" : "ready")
-        } catch (err: any) {
-            const status = err?.response?.status
+        } catch (err: unknown) {
+            const status = err && typeof err === "object" && "response" in err
+                ? (err as { response: { status: number } }).response.status
+                : undefined
             if (status === 404) {
-                // Genuinely no org — show setup flow
                 setState("no-org")
             } else {
-                // Network error, backend down, 500, etc — show retry screen
                 console.error("Dashboard load error:", err)
                 setState("error")
             }

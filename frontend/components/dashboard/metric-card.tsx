@@ -1,7 +1,7 @@
 "use client"
 
 import { TrendingUp, TrendingDown, MoreVertical } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
 interface MetricCardProps {
@@ -9,11 +9,10 @@ interface MetricCardProps {
     value: string
     change: number
     trend: "up" | "down"
-    label?: string
     icon?: React.ReactNode
 }
 
-export function MetricCard({ title, value, change, trend, label, icon }: MetricCardProps) {
+export function MetricCard({ title, value, change, trend, icon }: MetricCardProps) {
     const isUp = trend === "up"
 
     return (
