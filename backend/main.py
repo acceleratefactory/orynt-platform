@@ -58,7 +58,11 @@ app.add_middleware(
 # ─── Create DB tables on startup ─────────────────────────────────────────────
 @app.on_event("startup")
 def create_tables():
-    Base.metadata.create_all(bind=_get_engine())
+    try:
+        Base.metadata.create_all(bind=_get_engine())
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(f"Table creation skipped (non-fatal): {exc}")
 
 # ─── Routers ─────────────────────────────────────────────────────────────────
 app.include_router(health.router, tags=["Health"])
