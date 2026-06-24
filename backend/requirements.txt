@@ -14,3 +14,9 @@ pydantic-settings==2.7.0
 cryptography==42.0.8
 pymysql==1.1.1
 celery[redis]==5.4.0
+python-multipart==0.0.22
+phonenumbers==8.13.27
+anthropic==0.49.0
+python-multipart==0.0.22
+phonenumbers==8.13.27
+anthropic==0.49.0
