@@ -28,6 +28,7 @@ from app.models import integration, customer, order, order_item              # n
 from app.models import ad_campaign                                           # noqa: F401
 from app.models import social_metric                                         # noqa: F401
 from app.models import sync_error                                            # noqa: F401
+from app.models import stock_movement                                        # noqa: F401
 
 app = FastAPI(
     title="ORYNT API",
@@ -41,6 +42,9 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://getorynt.com",
+    "https://www.getorynt.com",
+    "https://orynt-platform-production.up.railway.app",
 ]
 
 app.add_middleware(
